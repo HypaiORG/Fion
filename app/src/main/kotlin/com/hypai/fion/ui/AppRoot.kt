@@ -44,6 +44,7 @@ import com.hypai.fion.ui.screen.ForwardScreen
 import com.hypai.fion.ui.screen.HomeScreen
 import com.hypai.fion.ui.screen.KeepAliveScreen
 import com.hypai.fion.ui.screen.SettingsScreen
+import com.hypai.fion.ui.screen.onboarding.OnboardingScreen
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
@@ -53,6 +54,7 @@ import kotlinx.serialization.Serializable
 
 @Serializable
 sealed interface Screen : NavKey {
+    @Serializable data object Onboarding : Screen
     @Serializable data object Home : Screen
     @Serializable data object Settings : Screen
     @Serializable data object Bark : Screen
@@ -141,7 +143,7 @@ private fun AppRoot() {
     }
     val readiness = rememberReadiness(onChange = model::onForeground)
 
-    val backStack = rememberNavBackStack(Screen.Home)
+    val backStack = rememberNavBackStack(if (ui.onboardingDone) Screen.Home else Screen.Onboarding)
     val goBack = remember(backStack) { { if (backStack.size > 1) backStack.removeLastOrNull() } }
     val open = remember(backStack) { { screen: Screen -> if (backStack.lastOrNull() != screen) backStack.add(screen) } }
     val saveableDecorator = rememberSaveableStateHolderNavEntryDecorator<NavKey>()
@@ -149,6 +151,15 @@ private fun AppRoot() {
     val decorators = remember(saveableDecorator, pageBackground) { listOf(saveableDecorator, pageBackground) }
     val provider = remember(model, readiness, backStack, goBack, open) {
         entryProvider<NavKey> {
+            entry<Screen.Onboarding> {
+                OnboardingScreen(
+                    readiness = readiness.value,
+                    onFinish = {
+                        model.finishOnboarding(readiness.value)
+                        backStack[0] = Screen.Home
+                    },
+                )
+            }
             entry<Screen.Home> {
                 val current = model.state.collectAsStateWithLifecycle().value ?: return@entry
                 HomeScreen(
