@@ -59,9 +59,9 @@ data class Settings(
         channels = if (on) channels + kind else channels - kind,
     )
 
-    fun toggledForwarding(): Settings =
-        if (forwarding) copy(forwardingEnabled = false)
-        else copy(forwardingEnabled = true, channels = channels.ifEmpty { EventKind.entries.toSet() })
+    fun withForwarding(on: Boolean): Settings =
+        if (on) copy(forwardingEnabled = true, channels = channels.ifEmpty { EventKind.entries.toSet() })
+        else copy(forwardingEnabled = false)
 
     fun push(kind: EventKind): PushProfile = when (kind) {
         EventKind.Sms -> smsPush

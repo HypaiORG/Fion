@@ -1,6 +1,7 @@
 package com.hypai.fion.ui
 
 import androidx.compose.animation.ContentTransform
+import androidx.compose.animation.SizeTransform
 import androidx.compose.animation.core.CubicBezierEasing
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateFloatAsState
@@ -39,6 +40,9 @@ object Motion {
     val PushPage: ContentTransform
         get() = slideInHorizontally(tween(300, easing = EmphasizedDecelerate)) { it } togetherWith
             slideOutHorizontally(tween(300, easing = EmphasizedDecelerate)) { -it / 3 }
+
+    val Swap: ContentTransform
+        get() = ContentTransform(fadeIn(tween(200, delayMillis = 90)), fadeOut(tween(90)), sizeTransform = SizeTransform(clip = false))
 
     val PopPage: ContentTransform
         get() = slideInHorizontally(tween(250, easing = EmphasizedDecelerate)) { -it / 3 } togetherWith

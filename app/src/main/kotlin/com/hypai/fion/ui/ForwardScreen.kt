@@ -55,6 +55,7 @@ import com.hypai.fion.core.defaultProfile
 import com.hypai.fion.core.groupChoice
 import com.hypai.fion.core.resolve
 import com.hypai.fion.core.templateChoice
+import com.hypai.fion.platform.Readiness
 import kotlinx.serialization.json.Json
 
 @get:StringRes
@@ -104,6 +105,7 @@ fun ForwardScreen(
     kind: EventKind,
     enabled: Boolean,
     saved: PushProfile,
+    readiness: Readiness,
     onEnabledChange: (Boolean) -> Unit,
     onChange: (PushProfile) -> Unit,
     onBack: () -> Unit,
@@ -111,6 +113,7 @@ fun ForwardScreen(
     var draft by rememberSaveable(stateSaver = ProfileSaver) { mutableStateOf(saved) }
     var showVariables by rememberSaveable { mutableStateOf(false) }
     var pickingSound by rememberSaveable { mutableStateOf(false) }
+    var askingPermission by rememberSaveable { mutableStateOf(false) }
     val language = currentLanguage()
     val template = draft.template.resolve(kind, language)
     val edit: (PushProfile) -> Unit = {
@@ -121,7 +124,7 @@ fun ForwardScreen(
 
     ScreenScaffold(title = stringResource(kind.titleRes), onBack = onBack, gutter = 20.dp, spacing = 16.dp) {
         GlassCard(padding = PaddingValues(16.dp)) {
-            EnableLine(kind, enabled, onEnabledChange)
+            EnableLine(kind, enabled) { on -> if (on && !readiness.allows(kind)) askingPermission = true else onEnabledChange(on) }
         }
 
         FormCard(
@@ -185,6 +188,18 @@ fun ForwardScreen(
                 pickingSound = false
             },
             onDismiss = { pickingSound = false },
+        )
+    }
+
+    if (askingPermission) {
+        PermissionSheet(
+            kinds = listOf(kind),
+            readiness = readiness,
+            onStart = {
+                onEnabledChange(true)
+                askingPermission = false
+            },
+            onDismiss = { askingPermission = false },
         )
     }
 }

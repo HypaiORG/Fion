@@ -179,7 +179,12 @@ private fun RequirementRow(item: Requirement) {
     ) {
         when (val control = item.control) {
             is Control.Toggle -> AppSwitch(control.checked, control.onChange)
-            is Control.Fix -> Crossfade(item.ready, label = "statusAction") { ready ->
+            is Control.Fix -> AnimatedContent(
+                item.ready,
+                contentAlignment = Alignment.CenterEnd,
+                transitionSpec = { Motion.Swap },
+                label = "statusAction",
+            ) { ready ->
                 if (ready) {
                     Text(stringResource(R.string.keep_enabled), style = Type.Secondary, color = Palette.Navy)
                 } else {

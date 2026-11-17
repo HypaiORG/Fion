@@ -15,8 +15,14 @@
     <string name="home_power">转发总开关</string>
     <string name="home_power_on">转发运行中</string>
     <string name="home_power_off">转发已暂停</string>
-    <string name="home_unconfigured">尚未配置 Bark，暂不转发</string>
-    <string name="home_unconfigured_action">去配置</string>
+    <string name="home_notice_bark">未配置 Bark</string>
+    <string name="home_notice_bark_summary">新消息不会推送</string>
+    <string name="home_notice_sms">未授权接收短信</string>
+    <string name="home_notice_sms_summary">新短信不会转发</string>
+    <string name="home_notice_call">未授权读取通话记录</string>
+    <string name="home_notice_call_summary">未接来电不会转发</string>
+    <string name="home_notice_setup">去配置</string>
+    <string name="home_notice_grant">去授权</string>
     <string name="home_total">累计转发</string>
     <plurals name="home_total_unit">
         <item quantity="other">条</item>
@@ -112,6 +118,14 @@
     <string name="var_carrier">接收所用 SIM 卡的运营商，如 docomo</string>
     <string name="var_sim_name">接收所用 SIM 卡的自定义名称</string>
     <string name="var_number">接收所用 SIM 卡的本机号码</string>
+
+    <string name="perm_sheet_title">开启转发需要授权</string>
+    <string name="perm_sheet_sms_title">转发短信需要授权</string>
+    <string name="perm_sheet_call_title">转发未接来电需要授权</string>
+    <string name="perm_sheet_sms_use">用于转发新短信</string>
+    <string name="perm_sheet_call_use">用于识别未接来电</string>
+    <string name="perm_sheet_note">仅在本机解析，直接推送到 Bark</string>
+    <string name="perm_sheet_start">开始转发</string>
 
     <string name="keep_grant">授权</string>
     <string name="keep_sms">接收短信</string>

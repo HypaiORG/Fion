@@ -1,13 +1,14 @@
 package com.hypai.fion.ui
 
-import androidx.compose.animation.AnimatedVisibility
+import androidx.annotation.StringRes
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.SizeTransform
 import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
-import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
-import androidx.compose.animation.shrinkVertically
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -27,6 +28,7 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawing
@@ -44,7 +46,10 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.ripple
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -70,6 +75,7 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Constraints
@@ -80,9 +86,12 @@ import androidx.compose.ui.unit.lerp
 import androidx.compose.ui.unit.min
 import androidx.compose.ui.unit.sp
 import com.hypai.fion.R
+import com.hypai.fion.core.EventKind
 import com.hypai.fion.core.Settings
 import com.hypai.fion.core.Stats
 import com.hypai.fion.core.endpoint
+import com.hypai.fion.platform.Readiness
+import com.hypai.fion.platform.permission
 import java.util.Locale
 import kotlin.math.max
 import kotlin.math.min
@@ -118,15 +127,29 @@ private fun FitText(
     }
 }
 
+private sealed interface Notice {
+    data object Bark : Notice
+    data class Denied(val kind: EventKind) : Notice
+}
+
+private fun notice(settings: Settings, readiness: Readiness): Notice? = when {
+    settings.bark.endpoint() == null -> Notice.Bark
+    else -> EventKind.entries.firstOrNull { !readiness.allows(it) }?.let(Notice::Denied)
+}
+
 @Composable
 fun HomeScreen(
     settings: Settings,
     stats: Stats,
-    onToggle: () -> Unit,
+    readiness: Readiness,
+    onUpdate: ((Settings) -> Settings) -> Unit,
     onOpenSettings: () -> Unit,
     onOpenBark: () -> Unit,
 ) {
     val scroll = rememberScrollState()
+    var askingPermission by rememberSaveable { mutableStateOf(false) }
+    val request = rememberPermissionRequest()
+    val notice = notice(settings, readiness)
     FitHeroLayout(
         Modifier
             .fillMaxSize()
@@ -145,16 +168,40 @@ fun HomeScreen(
         },
         hero = {
             BoxWithConstraints(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                PowerButton(on = settings.forwarding, onToggle = onToggle, diameter = min(maxHeight, PowerMax))
+                PowerButton(
+                    on = settings.forwarding,
+                    onToggle = {
+                        when {
+                            settings.forwarding -> onUpdate { it.withForwarding(false) }
+                            readiness.forwardable -> onUpdate { it.withForwarding(true) }
+                            else -> askingPermission = true
+                        }
+                    },
+                    diameter = min(maxHeight, PowerMax),
+                )
             }
         },
     ) {
-        AnimatedVisibility(
-            visible = settings.bark.endpoint() == null,
-            enter = fadeIn(tween(200, delayMillis = 100)) + expandVertically(tween(300, easing = Motion.EmphasizedDecelerate)),
-            exit = fadeOut(tween(100)) + shrinkVertically(tween(250, easing = Motion.EmphasizedAccelerate)),
-        ) { UnconfiguredBanner(onOpenBark) }
-        TotalCard(stats)
+        Column {
+            AnimatedContent(
+                targetState = notice,
+                modifier = Modifier.fillMaxWidth(),
+                contentAlignment = Alignment.TopCenter,
+                transitionSpec = {
+                    fadeIn(tween(200, delayMillis = 100)) togetherWith fadeOut(tween(100)) using
+                        SizeTransform { _, _ -> tween(300, easing = Motion.Standard) }
+                },
+                label = "notice",
+            ) { shown ->
+                val gap = Modifier.padding(bottom = SectionGap)
+                when (shown) {
+                    Notice.Bark -> NoticeBanner(shown, gap, onOpenBark)
+                    is Notice.Denied -> NoticeBanner(shown, gap) { request(shown.kind.permission) }
+                    null -> Box(Modifier.fillMaxWidth())
+                }
+            }
+            TotalCard(stats)
+        }
         Row(Modifier.height(IntrinsicSize.Max), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             MetricCard(
                 icon = Icons.Check,
@@ -176,6 +223,18 @@ fun HomeScreen(
             )
         }
         SimCard(stats)
+    }
+
+    if (askingPermission) {
+        PermissionSheet(
+            kinds = EventKind.entries,
+            readiness = readiness,
+            onStart = {
+                onUpdate { it.withForwarding(true) }
+                askingPermission = false
+            },
+            onDismiss = { askingPermission = false },
+        )
     }
 }
 
@@ -286,27 +345,58 @@ private fun PowerButton(on: Boolean, onToggle: () -> Unit, diameter: Dp) {
     }
 }
 
+private class NoticeLook(val icon: ImageVector, @param:StringRes val title: Int, @param:StringRes val summary: Int, @param:StringRes val action: Int)
+
+private val Notice.look: NoticeLook
+    get() = when (this) {
+        Notice.Bark -> NoticeLook(Icons.Bell, R.string.home_notice_bark, R.string.home_notice_bark_summary, R.string.home_notice_setup)
+        is Notice.Denied -> when (kind) {
+            EventKind.Sms -> NoticeLook(Icons.Sms, R.string.home_notice_sms, R.string.home_notice_sms_summary, R.string.home_notice_grant)
+            EventKind.MissedCall -> NoticeLook(Icons.MissedCall, R.string.home_notice_call, R.string.home_notice_call_summary, R.string.home_notice_grant)
+        }
+    }
+
 @Composable
-private fun UnconfiguredBanner(onOpenBark: () -> Unit) {
+private fun NoticeBanner(notice: Notice, modifier: Modifier, onClick: () -> Unit) {
+    val look = notice.look
     Row(
-        Modifier
+        modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(20.dp))
-            .background(Palette.AmberSurface)
-            .clickable(role = Role.Button, onClick = onOpenBark)
-            .padding(horizontal = 16.dp, vertical = 14.dp),
+            .glass()
+            .clickable(role = Role.Button, onClick = onClick)
+            .heightIn(min = 66.dp)
+            .padding(start = 14.dp, end = 12.dp, top = 12.dp, bottom = 12.dp),
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(12.dp),
+        horizontalArrangement = Arrangement.spacedBy(14.dp),
     ) {
-        Icon(Icons.Bell, contentDescription = null, Modifier.size(20.dp), tint = Palette.Amber)
-        Text(
-            stringResource(R.string.home_unconfigured),
-            Modifier.weight(1f),
-            style = Type.Body,
-            color = Palette.Amber,
-        )
-        Text(stringResource(R.string.home_unconfigured_action), style = Type.Label, color = Palette.Amber)
-        Chevron(Palette.Amber, 18.dp)
+        Box {
+            IconBadge(look.icon, Palette.AmberSurface, Palette.Copper, size = 40.dp)
+            Box(
+                Modifier
+                    .align(Alignment.TopEnd)
+                    .size(10.dp)
+                    .clip(CircleShape)
+                    .background(Palette.CopperGlow)
+                    .border(2.dp, Palette.Sheet, CircleShape),
+            )
+        }
+        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(1.dp)) {
+            Text(
+                stringResource(look.title),
+                style = Type.RowTitle,
+                fontWeight = FontWeight.Medium,
+                color = Palette.Ink,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+            Text(stringResource(look.summary), style = Type.Secondary, color = Palette.Muted, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        }
+        Box(
+            Modifier.height(34.dp).clip(CircleShape).background(Palette.Navy.copy(alpha = 0.12f)).padding(horizontal = 14.dp),
+            contentAlignment = Alignment.Center,
+        ) {
+            Text(stringResource(look.action), style = Type.Secondary, fontWeight = FontWeight.SemiBold, color = Palette.NavyDeep)
+        }
     }
 }
 

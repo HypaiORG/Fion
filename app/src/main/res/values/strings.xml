@@ -17,8 +17,14 @@
     <string name="home_power">Forwarding switch</string>
     <string name="home_power_on">Forwarding is on</string>
     <string name="home_power_off">Forwarding is paused</string>
-    <string name="home_unconfigured">Forwarding needs Bark setup</string>
-    <string name="home_unconfigured_action">Set up</string>
+    <string name="home_notice_bark">Bark not set up</string>
+    <string name="home_notice_bark_summary">Nothing is pushed</string>
+    <string name="home_notice_sms">No SMS access</string>
+    <string name="home_notice_sms_summary">New SMS are skipped</string>
+    <string name="home_notice_call">No call log access</string>
+    <string name="home_notice_call_summary">Missed calls skipped</string>
+    <string name="home_notice_setup">Set up</string>
+    <string name="home_notice_grant">Grant</string>
     <string name="home_total">Total forwarded</string>
     <plurals name="home_total_unit">
         <item quantity="one">message</item>
@@ -116,6 +122,14 @@
     <string name="var_carrier">Carrier of the receiving SIM, e.g. docomo</string>
     <string name="var_sim_name">Custom display name of the receiving SIM</string>
     <string name="var_number">Phone number of the receiving SIM</string>
+
+    <string name="perm_sheet_title">Grant access</string>
+    <string name="perm_sheet_sms_title">Grant SMS access</string>
+    <string name="perm_sheet_call_title">Grant call log access</string>
+    <string name="perm_sheet_sms_use">To forward SMS</string>
+    <string name="perm_sheet_call_use">To detect missed calls</string>
+    <string name="perm_sheet_note">Parsed locally, pushed to Bark</string>
+    <string name="perm_sheet_start">Start forwarding</string>
 
     <string name="keep_grant">Grant</string>
     <string name="keep_sms">Receive SMS</string>

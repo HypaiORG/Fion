@@ -294,12 +294,18 @@ fun AppSheet(
 }
 
 @Composable
-fun SheetButton(text: String, filled: Boolean, onClick: () -> Unit) {
+fun SheetButton(text: String, filled: Boolean, enabled: Boolean = true, onClick: () -> Unit) {
     if (filled) {
         Button(
             onClick = onClick,
             Modifier.height(40.dp),
-            colors = ButtonDefaults.buttonColors(containerColor = Palette.Navy, contentColor = Color.White),
+            enabled = enabled,
+            colors = ButtonDefaults.buttonColors(
+                containerColor = Palette.Navy,
+                contentColor = Color.White,
+                disabledContainerColor = Palette.Ink.copy(alpha = 0.10f),
+                disabledContentColor = Palette.Ink.copy(alpha = 0.38f),
+            ),
             contentPadding = PaddingValues(horizontal = 24.dp),
         ) { Text(text, style = Type.Label, fontWeight = FontWeight.SemiBold) }
     } else {
@@ -326,6 +332,18 @@ fun ConfirmDialog(
         confirmButton = { TextButton(onClick = onConfirm) { Text(confirm, color = Palette.Error) } },
         dismissButton = { TextButton(onClick = onDismiss) { Text(dismiss, color = Palette.Navy) } },
     )
+}
+
+@Composable
+fun InfoNote(text: String, modifier: Modifier = Modifier, icon: ImageVector = Icons.Info) {
+    Row(
+        modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(Palette.Neutral).padding(horizontal = 14.dp, vertical = 12.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(10.dp),
+    ) {
+        Icon(icon, contentDescription = null, Modifier.size(18.dp), tint = Palette.Muted)
+        Text(text, style = Type.Note, color = Palette.Muted)
+    }
 }
 
 @Composable

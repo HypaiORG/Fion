@@ -38,6 +38,7 @@ import com.hypai.fion.platform.Readiness
 import com.hypai.fion.platform.health
 import com.hypai.fion.platform.readiness
 import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import kotlinx.serialization.Serializable
@@ -64,16 +65,24 @@ class MainViewModel(private val graph: AppGraph) : ViewModel() {
         viewModelScope.launch { graph.runtime.updateData { it.copy(stats = Stats()) } }
     }
 
-    fun finishOnboarding() {
-        viewModelScope.launch { graph.runtime.updateData { it.copy(onboardingDone = true) } }
+    fun finishOnboarding(readiness: Readiness) {
+        viewModelScope.launch {
+            graph.runtime.updateData { it.copy(onboardingDone = true) }
+            pauseWithoutPermissions(readiness)
+        }
     }
 
-    fun onForeground() {
+    fun onForeground(readiness: Readiness) {
         viewModelScope.launch {
+            if (graph.runtime.data.first().onboardingDone) pauseWithoutPermissions(readiness)
             graph.forwarder.activate()
             graph.reconcileKeepAlive()
             graph.watchCallLog()
         }
+    }
+
+    private suspend fun pauseWithoutPermissions(readiness: Readiness) {
+        if (!readiness.forwardable) graph.settings.updateData { it.withForwarding(false) }
     }
 }
 
@@ -98,12 +107,12 @@ private class ReadinessState(private val read: () -> Readiness) {
 }
 
 @Composable
-private fun rememberReadiness(onChange: () -> Unit): ReadinessState {
+private fun rememberReadiness(onChange: (Readiness) -> Unit): ReadinessState {
     val context = LocalContext.current
     val state = remember { ReadinessState(context::readiness) }
     LifecycleResumeEffect(Unit) {
         state.refresh()
-        onChange()
+        onChange(state.value)
         onPauseOrDispose {}
     }
     return state
@@ -136,7 +145,7 @@ private fun AppRoot() {
             entry<Screen.Onboarding> {
                 OnboardingScreen(
                     onFinish = {
-                        model.finishOnboarding()
+                        model.finishOnboarding(readiness.value)
                         backStack[0] = Screen.Home
                     },
                 )
@@ -145,7 +154,8 @@ private fun AppRoot() {
                 HomeScreen(
                     settings = settings,
                     stats = runtime.value?.stats ?: return@entry,
-                    onToggle = { model.updateSettings(Settings::toggledForwarding) },
+                    readiness = readiness.value,
+                    onUpdate = model::updateSettings,
                     onOpenSettings = { open(Screen.Settings) },
                     onOpenBark = { open(Screen.Bark) },
                 )
@@ -180,6 +190,7 @@ private fun AppRoot() {
                     kind = key.kind,
                     enabled = settings.forwards(key.kind),
                     saved = settings.push(key.kind),
+                    readiness = readiness.value,
                     onEnabledChange = { on -> model.updateSettings { it.withChannel(key.kind, on) } },
                     onChange = { profile -> model.updateSettings { it.withPush(key.kind, profile) } },
                     onBack = goBack,

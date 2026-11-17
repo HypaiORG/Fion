@@ -27,7 +27,7 @@ class SettingsTest {
 
     @Test
     fun `stopping forwarding keeps the chosen channels`() {
-        val stopped = Settings(channels = smsOnly).toggledForwarding()
+        val stopped = Settings(channels = smsOnly).withForwarding(false)
 
         assertFalse(stopped.forwarding)
         assertEquals(smsOnly, stopped.channels)
@@ -35,7 +35,7 @@ class SettingsTest {
 
     @Test
     fun `starting forwarding keeps the chosen channels`() {
-        val started = Settings(forwardingEnabled = false, channels = smsOnly).toggledForwarding()
+        val started = Settings(forwardingEnabled = false, channels = smsOnly).withForwarding(true)
 
         assertTrue(started.forwarding)
         assertEquals(smsOnly, started.channels)
@@ -43,7 +43,7 @@ class SettingsTest {
 
     @Test
     fun `starting forwarding with no channels enables every channel`() {
-        val started = Settings(channels = emptySet()).toggledForwarding()
+        val started = Settings(channels = emptySet()).withForwarding(true)
 
         assertTrue(started.forwarding)
         assertEquals(all, started.channels)

@@ -8,6 +8,7 @@ import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.PowerManager
 import android.provider.Settings
+import com.hypai.fion.core.EventKind
 
 fun Context.isGranted(permission: String): Boolean =
     checkSelfPermission(permission) == PackageManager.PERMISSION_GRANTED
@@ -18,6 +19,12 @@ enum class PermissionGroup(vararg val permissions: String) {
     Phone(Manifest.permission.READ_PHONE_STATE, Manifest.permission.READ_PHONE_NUMBERS),
     Notifications(Manifest.permission.POST_NOTIFICATIONS),
 }
+
+val EventKind.permission: PermissionGroup
+    get() = when (this) {
+        EventKind.Sms -> PermissionGroup.Sms
+        EventKind.MissedCall -> PermissionGroup.CallLog
+    }
 
 fun Context.isGranted(group: PermissionGroup): Boolean = group.permissions.all(::isGranted)
 
@@ -30,6 +37,13 @@ data class Readiness(
     val batteryUnrestricted: Boolean,
     val notifications: Boolean,
 ) {
+    fun allows(kind: EventKind): Boolean = when (kind) {
+        EventKind.Sms -> sms
+        EventKind.MissedCall -> callLog
+    }
+
+    val forwardable: Boolean get() = EventKind.entries.any(::allows)
+
     fun keepAliveNotice(persistentNotification: Boolean): Boolean = notifications && persistentNotification
 }
 
