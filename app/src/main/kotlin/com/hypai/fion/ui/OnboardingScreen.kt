@@ -173,28 +173,25 @@ fun OnboardingScreen(onFinish: () -> Unit) {
                 }
             }
         }
-        AnimatedContent(
-            step,
-            Modifier.padding(horizontal = 20.dp).fillMaxWidth().height(84.dp).glass(RoundedCornerShape(22.dp)),
-            transitionSpec = { stepTransition() },
-            label = "stepNote",
-        ) {
-            Row(
-                Modifier.fillMaxSize().padding(horizontal = 18.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(14.dp),
-            ) {
-                IconBadge(it.noteIcon, Palette.Navy.copy(alpha = 0.10f), Palette.Navy, RoundedCornerShape(14.dp), 44.dp, 22.dp)
-                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
-                    Text(
-                        stringResource(it.noteTitle),
-                        style = Type.Field,
-                        fontWeight = FontWeight.SemiBold,
-                        color = Palette.Ink,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                    )
-                    Text(stringResource(it.note), style = Type.Secondary, color = Palette.Muted, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        Box(Modifier.padding(horizontal = 20.dp).fillMaxWidth().height(84.dp).glass(RoundedCornerShape(22.dp))) {
+            AnimatedContent(step, Modifier.fillMaxSize(), transitionSpec = { stepTransition() }, label = "stepNote") {
+                Row(
+                    Modifier.fillMaxSize().padding(horizontal = 18.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(14.dp),
+                ) {
+                    IconBadge(it.noteIcon, Palette.Navy.copy(alpha = 0.10f), Palette.Navy, RoundedCornerShape(14.dp), 44.dp, 22.dp)
+                    Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                        Text(
+                            stringResource(it.noteTitle),
+                            style = Type.Field,
+                            fontWeight = FontWeight.SemiBold,
+                            color = Palette.Ink,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                        Text(stringResource(it.note), style = Type.Secondary, color = Palette.Muted, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    }
                 }
             }
         }
