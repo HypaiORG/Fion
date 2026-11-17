@@ -1,0 +1,383 @@
+package com.hypai.fion.ui.design
+
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.animateContentSize
+import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.core.tween
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsFocusedAsState
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.selection.toggleable
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.FilledTonalButton
+import androidx.compose.material3.Icon
+import androidx.compose.material3.SegmentedButton
+import androidx.compose.material3.SegmentedButtonDefaults
+import androidx.compose.material3.SingleChoiceSegmentedButtonRow
+import androidx.compose.material3.Switch
+import androidx.compose.material3.SwitchDefaults
+import androidx.compose.material3.Text
+import androidx.compose.material3.ripple
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.layout.layout
+import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.toggleableState
+import androidx.compose.ui.state.ToggleableState
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.VisualTransformation
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.offset
+
+private val PrimaryButtonBrush = Brush.verticalGradient(listOf(Palette.ButtonTop, Palette.Ink))
+private val FieldCorner = 14.dp
+private val RowBleed = 8.dp
+
+val FieldShape = RoundedCornerShape(FieldCorner)
+val RowShape = RoundedCornerShape(20.dp)
+
+@Composable
+fun PrimaryButton(text: String, modifier: Modifier = Modifier, onClick: () -> Unit) {
+    val interaction = remember { MutableInteractionSource() }
+    Box(
+        modifier
+            .pressScale(interaction, pressedScale = 0.97f)
+            .height(54.dp)
+            .clip(CircleShape)
+            .background(PrimaryButtonBrush)
+            .clickable(interaction, ripple(color = Color.White), role = Role.Button, onClick = onClick),
+        contentAlignment = Alignment.Center,
+    ) {
+        Text(
+            text,
+            Modifier.padding(horizontal = 20.dp),
+            style = Type.Field,
+            fontWeight = FontWeight.SemiBold,
+            color = Color.White,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+        )
+    }
+}
+
+@Composable
+fun ActionPill(text: String, onClick: () -> Unit, modifier: Modifier = Modifier) {
+    FilledTonalButton(
+        onClick = onClick,
+        modifier = modifier.height(36.dp),
+        contentPadding = PaddingValues(horizontal = 16.dp, vertical = 0.dp),
+        colors = ButtonDefaults.filledTonalButtonColors(
+            containerColor = Palette.NavySurface,
+            contentColor = Palette.NavyDeep,
+        ),
+    ) {
+        Text(text, style = Type.Label, fontWeight = FontWeight.SemiBold, maxLines = 1)
+    }
+}
+
+@Composable
+fun ActionPillTag(text: String, modifier: Modifier = Modifier) {
+    Box(
+        modifier.height(36.dp).clip(CircleShape).background(Palette.NavySurface).padding(horizontal = 16.dp),
+        contentAlignment = Alignment.Center,
+    ) {
+        Text(text, style = Type.Label, fontWeight = FontWeight.SemiBold, color = Palette.NavyDeep, maxLines = 1)
+    }
+}
+
+@Composable
+fun FormField(
+    value: String,
+    onValueChange: (String) -> Unit,
+    label: String,
+    modifier: Modifier = Modifier,
+    hint: String? = null,
+    hintColor: Color = Palette.Muted,
+    isError: Boolean = false,
+    prefix: String? = null,
+    lines: Int = 1,
+    textStyle: TextStyle = Type.Field,
+    visualTransformation: VisualTransformation = VisualTransformation.None,
+    keyboardOptions: KeyboardOptions = KeyboardOptions.Default,
+    trailing: @Composable () -> Unit = {},
+) {
+    val interaction = remember { MutableInteractionSource() }
+    val focused by interaction.collectIsFocusedAsState()
+    val borderColor = animateColorAsState(
+        when {
+            focused -> Palette.Navy
+            isError -> Palette.Error
+            else -> Palette.Ink.copy(alpha = 0.14f)
+        },
+        tween(150),
+        label = "fieldBorder",
+    )
+    val borderWidth = animateDpAsState(if (focused) 2.dp else 1.dp, tween(150), label = "fieldBorderWidth")
+    val singleLine = lines == 1
+    Column(modifier.fillMaxWidth().animateContentSize(tween(200, easing = Motion.Standard)), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        BasicTextField(
+            value = value,
+            onValueChange = onValueChange,
+            modifier = Modifier.fillMaxWidth().semantics { contentDescription = label },
+            textStyle = textStyle.copy(color = Palette.Ink),
+            singleLine = singleLine,
+            minLines = lines,
+            visualTransformation = visualTransformation,
+            keyboardOptions = keyboardOptions,
+            interactionSource = interaction,
+            cursorBrush = SolidColor(Palette.Navy),
+            decorationBox = { field ->
+                Row(
+                    Modifier
+                        .fillMaxWidth()
+                        .heightIn(min = 60.dp)
+                        .clip(FieldShape)
+                        .background(Color.White.copy(alpha = 0.72f))
+                        .drawWithContent {
+                            drawContent()
+                            val width = borderWidth.value.toPx()
+                            val radius = FieldCorner.toPx() - width / 2
+                            drawRoundRect(
+                                borderColor.value,
+                                topLeft = Offset(width / 2, width / 2),
+                                size = Size(size.width - width, size.height - width),
+                                cornerRadius = CornerRadius(radius),
+                                style = Stroke(width),
+                            )
+                        },
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Column(
+                        Modifier
+                            .weight(1f)
+                            .padding(start = 16.dp, end = 16.dp, top = 8.dp, bottom = if (singleLine) 6.dp else 12.dp),
+                        verticalArrangement = Arrangement.spacedBy(if (singleLine) 2.dp else 4.dp),
+                    ) {
+                        Text(label, style = Type.Caption, color = Palette.Muted)
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            if (prefix != null) Text(prefix, style = textStyle, color = Palette.Muted)
+                            Box(Modifier.weight(1f)) { field() }
+                        }
+                    }
+                    trailing()
+                }
+            },
+        )
+        if (hint != null) {
+            val color by animateColorAsState(hintColor, tween(150), label = "fieldHint")
+            Text(hint, Modifier.padding(horizontal = 16.dp), style = Type.Caption, color = color)
+        }
+    }
+}
+
+@Composable
+fun ListRow(
+    title: String,
+    subtitle: String,
+    leading: @Composable () -> Unit,
+    modifier: Modifier = Modifier,
+    titleColor: Color = Palette.Ink,
+    onClick: (() -> Unit)? = null,
+    role: Role = Role.Button,
+    trailing: @Composable () -> Unit = {},
+) {
+    Row(
+        modifier
+            .fillMaxWidth()
+            .clip(RowShape)
+            .then(if (onClick != null) Modifier.clickable(role = role, onClick = onClick) else Modifier)
+            .heightIn(min = 64.dp)
+            .padding(horizontal = 12.dp, vertical = 8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(14.dp),
+    ) {
+        leading()
+        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(1.dp)) {
+            Text(title, style = Type.RowTitle, color = titleColor)
+            if (subtitle.isNotEmpty()) Text(subtitle, style = Type.Secondary, color = Palette.Muted)
+        }
+        trailing()
+    }
+}
+
+@Composable
+fun AppSwitch(checked: Boolean, onCheckedChange: ((Boolean) -> Unit)?) {
+    val haptics = LocalHapticFeedback.current
+    Switch(
+        checked = checked,
+        onCheckedChange = onCheckedChange?.let { change ->
+            { on: Boolean ->
+                haptics.toggle(on)
+                change(on)
+            }
+        },
+        thumbContent = if (checked) {
+            { Icon(Icons.Check, contentDescription = null, Modifier.size(14.dp)) }
+        } else {
+            null
+        },
+        colors = SwitchDefaults.colors(
+            checkedTrackColor = Palette.Navy,
+            checkedThumbColor = Color.White,
+            checkedIconColor = Palette.Navy,
+            uncheckedTrackColor = Palette.Sand,
+            uncheckedThumbColor = Palette.Outline,
+            uncheckedBorderColor = Palette.Hairline,
+        ),
+    )
+}
+
+@Composable
+fun SwitchRow(
+    title: String,
+    subtitle: String,
+    checked: Boolean,
+    onCheckedChange: (Boolean) -> Unit,
+    leading: @Composable () -> Unit = {},
+) {
+    val haptics = LocalHapticFeedback.current
+    ListRow(
+        title = title,
+        subtitle = subtitle,
+        leading = leading,
+        modifier = Modifier.semantics { toggleableState = ToggleableState(checked) },
+        onClick = {
+            haptics.toggle(!checked)
+            onCheckedChange(!checked)
+        },
+        role = Role.Switch,
+    ) { AppSwitch(checked, onCheckedChange = null) }
+}
+
+private fun Modifier.bleed(inset: Dp = RowBleed): Modifier = layout { measurable, constraints ->
+    val px = inset.roundToPx()
+    val placeable = measurable.measure(constraints.offset(2 * px, 2 * px))
+    layout(placeable.width - 2 * px, placeable.height - 2 * px) { placeable.place(-px, -px) }
+}
+
+@Composable
+fun BleedSwitchRow(
+    title: String,
+    subtitle: String,
+    checked: Boolean,
+    onCheckedChange: (Boolean) -> Unit,
+    titleStyle: TextStyle = Type.Body,
+    minHeight: Dp = 48.dp,
+    leading: (@Composable () -> Unit)? = null,
+) {
+    val haptics = LocalHapticFeedback.current
+    Row(
+        Modifier
+            .bleed()
+            .fillMaxWidth()
+            .clip(RowShape)
+            .toggleable(value = checked, role = Role.Switch) {
+                haptics.toggle(it)
+                onCheckedChange(it)
+            }
+            .padding(RowBleed)
+            .heightIn(min = minHeight),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(10.dp),
+    ) {
+        if (leading != null) leading()
+        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(1.dp)) {
+            Text(title, style = titleStyle, color = Palette.Ink)
+            Text(subtitle, style = Type.Caption, color = Palette.Muted)
+        }
+        AppSwitch(checked, onCheckedChange = null)
+    }
+}
+
+@Composable
+fun RadioOption(label: String, selected: Boolean, trailing: @Composable () -> Unit = {}, onSelect: () -> Unit) {
+    val haptics = LocalHapticFeedback.current
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .height(56.dp)
+            .selectable(selected = selected, role = Role.RadioButton) {
+                if (!selected) haptics.performHapticFeedback(HapticFeedbackType.SegmentTick)
+                onSelect()
+            }
+            .padding(start = 16.dp, end = 24.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(16.dp),
+    ) {
+        RadioMark(selected)
+        Text(label, Modifier.weight(1f), style = Type.Option, color = Palette.Ink, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        trailing()
+    }
+}
+
+@Composable
+private fun RadioMark(on: Boolean) {
+    val ring by animateColorAsState(if (on) Palette.Navy else Palette.Muted, tween(150), label = "radioRing")
+    val dot by animateDpAsState(if (on) 10.dp else 0.dp, tween(200, easing = Motion.EmphasizedDecelerate), label = "radioDot")
+    Box(Modifier.size(40.dp), contentAlignment = Alignment.Center) {
+        Box(Modifier.size(20.dp).border(2.dp, ring, CircleShape), contentAlignment = Alignment.Center) {
+            Box(Modifier.size(dot).clip(CircleShape).background(Palette.Navy))
+        }
+    }
+}
+
+@Composable
+fun <T> SegmentedChoice(options: List<Pair<T, String>>, selected: T, onSelect: (T) -> Unit) {
+    val haptics = LocalHapticFeedback.current
+    SingleChoiceSegmentedButtonRow(Modifier.fillMaxWidth().height(40.dp)) {
+        options.forEachIndexed { index, (value, label) ->
+            SegmentedButton(
+                selected = value == selected,
+                onClick = {
+                    if (value != selected) haptics.performHapticFeedback(HapticFeedbackType.SegmentTick)
+                    onSelect(value)
+                },
+                shape = SegmentedButtonDefaults.itemShape(index, options.size),
+                icon = {},
+                border = SegmentedButtonDefaults.borderStroke(Palette.Outline),
+                colors = SegmentedButtonDefaults.colors(
+                    activeContainerColor = Palette.NavySurface,
+                    activeContentColor = Palette.NavyDeep,
+                    inactiveContainerColor = Color.Transparent,
+                    inactiveContentColor = Palette.Ink,
+                ),
+            ) { Text(label, style = Type.Secondary, maxLines = 1) }
+        }
+    }
+}
