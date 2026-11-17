@@ -16,8 +16,21 @@ android {
         versionName = "1.0.0"
     }
 
+    val releaseKeystore = providers.environmentVariable("FION_KEYSTORE_FILE").orNull
+    signingConfigs {
+        if (releaseKeystore != null) {
+            create("release") {
+                storeFile = file(releaseKeystore)
+                storePassword = providers.environmentVariable("FION_KEYSTORE_PASSWORD").get()
+                keyAlias = providers.environmentVariable("FION_KEY_ALIAS").get()
+                keyPassword = providers.environmentVariable("FION_KEY_PASSWORD").get()
+            }
+        }
+    }
+
     buildTypes {
         release {
+            signingConfig = signingConfigs.findByName("release")
             isMinifyEnabled = true
             isShrinkResources = true
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"))
