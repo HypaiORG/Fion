@@ -40,13 +40,19 @@ import com.hypai.fion.platform.permission
 
 private const val DIALOG_SKIPPED_MS = 350L
 
+enum class PermissionOutcome { Granted, Denied, Blocked }
+
 @Composable
-fun rememberPermissionRequest(onAnswered: () -> Unit = {}): (PermissionGroup) -> Unit {
-    val context = LocalContext.current
+fun rememberPermissionRequest(onResult: (PermissionOutcome) -> Unit): (PermissionGroup) -> Unit {
     var requestedAt by remember { mutableLongStateOf(0L) }
     val launcher = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { result ->
-        val dialogSkipped = SystemClock.elapsedRealtime() - requestedAt < DIALOG_SKIPPED_MS
-        if (result.values.any { !it } && dialogSkipped) context.startActivity(context.appDetailsIntent()) else onAnswered()
+        onResult(
+            when {
+                result.values.all { it } -> PermissionOutcome.Granted
+                SystemClock.elapsedRealtime() - requestedAt < DIALOG_SKIPPED_MS -> PermissionOutcome.Blocked
+                else -> PermissionOutcome.Denied
+            },
+        )
     }
     return { group ->
         requestedAt = SystemClock.elapsedRealtime()
@@ -70,7 +76,8 @@ private val EventKind.permissionLook: PermissionLook
 
 @Composable
 fun PermissionSheet(kinds: List<EventKind>, readiness: Readiness, onStart: () -> Unit, onDismiss: () -> Unit) {
-    val request = rememberPermissionRequest()
+    val context = LocalContext.current
+    val request = rememberPermissionRequest { if (it == PermissionOutcome.Blocked) context.startActivity(context.appDetailsIntent()) }
     val (title, subtitle) = when (kinds.singleOrNull()) {
         null -> R.string.perm_sheet_title to R.string.service_text
         EventKind.Sms -> R.string.perm_sheet_sms_title to R.string.forward_sms_on

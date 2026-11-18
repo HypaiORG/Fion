@@ -65,6 +65,7 @@ import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.graphics.vector.rememberVectorPainter
 import androidx.compose.ui.layout.Layout
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.pluralStringResource
@@ -91,6 +92,7 @@ import com.hypai.fion.core.Settings
 import com.hypai.fion.core.Stats
 import com.hypai.fion.core.endpoint
 import com.hypai.fion.platform.Readiness
+import com.hypai.fion.platform.appDetailsIntent
 import com.hypai.fion.platform.permission
 import java.util.Locale
 import kotlin.math.max
@@ -148,7 +150,8 @@ fun HomeScreen(
 ) {
     val scroll = rememberScrollState()
     var askingPermission by rememberSaveable { mutableStateOf(false) }
-    val request = rememberPermissionRequest()
+    val context = LocalContext.current
+    val request = rememberPermissionRequest { if (it == PermissionOutcome.Blocked) context.startActivity(context.appDetailsIntent()) }
     val notice = notice(settings, readiness)
     FitHeroLayout(
         Modifier

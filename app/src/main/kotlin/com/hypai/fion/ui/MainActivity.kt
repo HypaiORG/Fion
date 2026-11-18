@@ -144,6 +144,7 @@ private fun AppRoot() {
         entryProvider = entryProvider {
             entry<Screen.Onboarding> {
                 OnboardingScreen(
+                    readiness = readiness.value,
                     onFinish = {
                         model.finishOnboarding(readiness.value)
                         backStack[0] = Screen.Home

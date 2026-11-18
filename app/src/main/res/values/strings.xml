@@ -179,4 +179,5 @@
     <string name="onb_battery_note">Set to Unrestricted so Fion stays on</string>
     <string name="onb_step">Step %1$d of %2$d</string>
     <string name="onb_later">Not now</string>
+    <string name="onb_open_settings">Open system settings</string>
 </resources>

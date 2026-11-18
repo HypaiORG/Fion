@@ -39,6 +39,7 @@ import androidx.compose.ui.unit.dp
 import com.hypai.fion.R
 import com.hypai.fion.platform.PermissionGroup
 import com.hypai.fion.platform.Readiness
+import com.hypai.fion.platform.appDetailsIntent
 import com.hypai.fion.platform.openBatteryExemption
 
 private sealed interface Control {
@@ -56,7 +57,7 @@ fun KeepAliveScreen(
     onBack: () -> Unit,
 ) {
     val context = LocalContext.current
-    val request = rememberPermissionRequest()
+    val request = rememberPermissionRequest { if (it == PermissionOutcome.Blocked) context.startActivity(context.appDetailsIntent()) }
     fun grant(group: PermissionGroup) = Control.Fix(R.string.keep_grant) { request(group) }
 
     val permissions = listOf(

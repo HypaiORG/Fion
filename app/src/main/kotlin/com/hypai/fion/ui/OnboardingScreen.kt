@@ -1,8 +1,7 @@
 package com.hypai.fion.ui
 
+import android.content.Intent
 import androidx.activity.compose.BackHandler
-import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.contract.ActivityResultContracts
 import androidx.annotation.StringRes
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedContentTransitionScope
@@ -38,8 +37,10 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -82,6 +83,8 @@ import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import com.hypai.fion.R
 import com.hypai.fion.platform.PermissionGroup
+import com.hypai.fion.platform.Readiness
+import com.hypai.fion.platform.appDetailsIntent
 import com.hypai.fion.platform.openBatteryExemption
 
 private sealed interface StepAction {
@@ -122,27 +125,46 @@ private enum class Step(
         Icons.Zap, R.string.onb_battery_note_title, R.string.onb_battery_note,
         StepAction.ExemptBattery,
     ),
+    ;
+
+    fun done(readiness: Readiness): Boolean = when (this) {
+        Sms -> readiness.sms
+        CallLog -> readiness.callLog
+        Phone -> readiness.phone
+        Notify -> readiness.notifications
+        Battery -> readiness.batteryUnrestricted
+    }
 }
 
 @Composable
-fun OnboardingScreen(onFinish: () -> Unit) {
-    val context = LocalContext.current
-    var index by rememberSaveable { mutableIntStateOf(0) }
-    val step = Step.entries[index]
-    val advance = { if (index == Step.entries.lastIndex) onFinish() else index += 1 }
-    val request = rememberPermissionRequest(onAnswered = advance)
-    val settingsLauncher = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) { advance() }
+fun OnboardingScreen(readiness: Readiness, onFinish: () -> Unit) {
+    val plan = rememberSaveable { Step.entries.filterNot { it.done(readiness) } }
+    var cursor by rememberSaveable { mutableIntStateOf(0) }
+    var blocked by rememberSaveable { mutableStateOf(emptySet<Step>()) }
+    val index = plan.indices.firstOrNull { it >= cursor && !plan[it].done(readiness) }
+    if (index == null) {
+        LaunchedEffect(Unit) { onFinish() }
+        return
+    }
+    val previous = (0 until index).lastOrNull { !plan[it].done(readiness) }
+    BackHandler(enabled = previous != null) { previous?.let { cursor = it } }
+    StepPage(plan, index, blocked = plan[index] in blocked, onBlocked = { blocked = blocked + it }, onSkip = { cursor = index + 1 })
+}
 
-    BackHandler(enabled = index > 0) { index -= 1 }
+@Composable
+private fun StepPage(plan: List<Step>, index: Int, blocked: Boolean, onBlocked: (Step) -> Unit, onSkip: () -> Unit) {
+    val context = LocalContext.current
+    val step = plan[index]
+    val request = rememberPermissionRequest { if (it == PermissionOutcome.Blocked) onBlocked(step) }
 
     Column(Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.safeDrawing)) {
         Column(Modifier.padding(start = 24.dp, end = 24.dp, top = 36.dp), verticalArrangement = Arrangement.spacedBy(18.dp)) {
-            val progress = stringResource(R.string.onb_step, index + 1, Step.entries.size)
+            val progress = stringResource(R.string.onb_step, index + 1, plan.size)
             Row(
                 Modifier.clearAndSetSemantics { contentDescription = progress },
                 horizontalArrangement = Arrangement.spacedBy(6.dp),
             ) {
-                Step.entries.forEachIndexed { i, _ ->
+                plan.forEachIndexed { i, _ ->
                     val color by animateColorAsState(
                         when {
                             i == index -> Palette.Navy
@@ -199,14 +221,15 @@ fun OnboardingScreen(onFinish: () -> Unit) {
             Modifier.padding(start = 20.dp, end = 20.dp, top = 22.dp, bottom = 18.dp),
             verticalArrangement = Arrangement.spacedBy(2.dp),
         ) {
-            PrimaryButton(stringResource(step.button), Modifier.fillMaxWidth()) {
+            PrimaryButton(stringResource(if (blocked) R.string.onb_open_settings else step.button), Modifier.fillMaxWidth()) {
                 when (val action = step.action) {
+                    is StepAction.Grant if blocked -> context.startActivity(context.appDetailsIntent().addFlags(Intent.FLAG_ACTIVITY_NEW_DOCUMENT))
                     is StepAction.Grant -> request(action.group)
-                    StepAction.ExemptBattery -> context.openBatteryExemption(settingsLauncher::launch)
+                    StepAction.ExemptBattery -> context.openBatteryExemption(context::startActivity)
                 }
             }
             Box(
-                Modifier.fillMaxWidth().height(48.dp).clip(CircleShape).clickable(role = Role.Button, onClick = advance),
+                Modifier.fillMaxWidth().height(48.dp).clip(CircleShape).clickable(role = Role.Button, onClick = onSkip),
                 contentAlignment = Alignment.Center,
             ) { Text(stringResource(R.string.onb_later), style = Type.Label, color = Palette.Muted) }
         }
