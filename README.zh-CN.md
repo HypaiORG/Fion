@@ -32,9 +32,13 @@
 - 不含统计分析、崩溃上报与版本检查，依赖仅有 AndroidX 与 kotlinx。
 - 短信与来电只在本机解析，不保存短信原文与通话明细。
 
+## 系统要求
+
+- Android 15（API 35）及以上。
+
 ## 安装
 
-1. 从 [Releases](../../releases) 下载 `Fion-x.y.z.apk` 并安装，系统需 Android 15 及以上。
+1. 从 [Releases](../../releases) 下载 `Fion-x.y.z.apk` 并安装。
 2. 打开 App，按引导授予短信、通话记录、本机号码、通知与后台运行权限。
 3. 进入「设置」→「Bark 推送通道」，填写服务器与 Device Key。
 
@@ -50,21 +54,3 @@ Android 会拦截通过 APK 文件安装的应用读取短信与通话记录，�
   <img src="docs/images/zh/restricted-denied.jpg" width="30%" alt="系统已拒绝向此应用授予权限">
   <img src="docs/images/zh/restricted-allow.jpg" width="30%" alt="允许限制性设置">
 </p>
-
-## 模板变量
-
-标题与正文均为纯文本，`{{变量}}` 在推送时替换。
-
-| 变量 | 含义 |
-| :--- | :--- |
-| `{{来源号码}}` | 对方号码 |
-| `{{短信内容}}` | 短信全文 |
-| `{{来电次数}}` | 该号码今日来电次数 |
-| `{{时间}}` | 接收时间 |
-| `{{运营商}}` | 接收 SIM 卡的运营商 |
-| `{{SIM卡}}` | 接收 SIM 卡的名称 |
-| `{{电话号码}}` | 接收 SIM 卡的本机号码 |
-
-## 许可证
-
-[GPL-3.0](LICENSE)

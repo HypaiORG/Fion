@@ -32,9 +32,13 @@ English | [简体中文](README.zh-CN.md)
 - No analytics, no crash reporting, no update checks. Dependencies are AndroidX and kotlinx only.
 - SMS and calls are parsed on the device. Message text and call details are never stored.
 
+## Requirements
+
+- Android 15 (API 35) or later.
+
 ## Install
 
-1. Download `Fion-x.y.z.apk` from [Releases](../../releases). Requires Android 15 or later.
+1. Download `Fion-x.y.z.apk` from [Releases](../../releases) and install it.
 2. Open the app and grant SMS, call log, phone number, notification and background permissions as guided.
 3. Go to Settings → Bark channel and enter your server and Device Key.
 
@@ -50,21 +54,3 @@ Android blocks SMS and call log access for apps installed from an APK file and s
   <img src="docs/images/en/restricted-denied.jpg" width="30%" alt="App was denied access">
   <img src="docs/images/en/restricted-allow.jpg" width="30%" alt="Allow restricted settings">
 </p>
-
-## Template variables
-
-Titles and bodies are plain text. Each `{{variable}}` is replaced at push time.
-
-| Variable | Value |
-| :--- | :--- |
-| `{{sender}}` | Caller or sender number |
-| `{{message}}` | Full SMS text |
-| `{{callCount}}` | Calls from this number today |
-| `{{time}}` | Time received |
-| `{{carrier}}` | Carrier of the receiving SIM |
-| `{{simName}}` | Name of the receiving SIM |
-| `{{simNumber}}` | Number of the receiving SIM |
-
-## License
-
-[GPL-3.0](LICENSE)
