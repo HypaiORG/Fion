@@ -1,9 +1,12 @@
 package com.hypai.fion.platform
 
+import android.content.ComponentName
 import android.content.Context
 import android.provider.Settings
+import android.telecom.PhoneAccountHandle
 import android.telephony.SubscriptionInfo
 import android.telephony.SubscriptionManager
+import android.telephony.TelephonyManager
 import com.hypai.fion.core.SimIdentity
 import com.hypai.fion.core.SimKey
 
@@ -38,4 +41,17 @@ class Telephony(private val context: Context) {
     fun activeSims(): Map<Int, SimIdentity> = subscriptions().associate { it.subscriptionId to it.identity() }
 
     fun sim(subscriptionId: Int?, slotIndex: Int?): SimIdentity = SimIdentity.resolve(activeSims(), subscriptionId, slotIndex)
+
+    fun subscriptionId(accountComponent: String?, accountId: String?): Int? {
+        val component = accountComponent?.let(ComponentName::unflattenFromString) ?: return null
+        val account = PhoneAccountHandle(component, accountId ?: return null)
+        return try {
+            context.getSystemService(TelephonyManager::class.java).getSubscriptionId(account)
+                .takeIf { it != SubscriptionManager.INVALID_SUBSCRIPTION_ID }
+        } catch (_: SecurityException) {
+            null
+        } catch (_: UnsupportedOperationException) {
+            null
+        }
+    }
 }

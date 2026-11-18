@@ -29,7 +29,7 @@ class SystemCallLog(
             CallLog.Calls.CONTENT_URI,
             arrayOf(
                 CallLog.Calls._ID, CallLog.Calls.TYPE, CallLog.Calls.NUMBER,
-                CallLog.Calls.DATE, CallLog.Calls.PHONE_ACCOUNT_ID,
+                CallLog.Calls.DATE, CallLog.Calls.PHONE_ACCOUNT_COMPONENT_NAME, CallLog.Calls.PHONE_ACCOUNT_ID,
             ),
             "${CallLog.Calls._ID} > ?",
             arrayOf(afterId.toString()),
@@ -42,7 +42,7 @@ class SystemCallLog(
                 val date = rows.getLong(3)
                 missed += LoggedMissedCall(maxId, ForwardEvent.MissedCall(
                     from = number,
-                    sim = SimIdentity.resolve(sims, rows.getString(4)?.toIntOrNull(), slotIndex = null),
+                    sim = SimIdentity.resolve(sims, telephony.subscriptionId(rows.getString(4), rows.getString(5)), slotIndex = null),
                     occurredAtMs = date,
                     receivedAtMs = receivedAt,
                     countToday = missedTodayCount(number, date),
