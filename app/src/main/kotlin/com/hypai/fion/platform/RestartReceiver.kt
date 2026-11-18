@@ -7,14 +7,20 @@ import com.hypai.fion.graph
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 
-class BootReceiver : BroadcastReceiver() {
+class RestartReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
-        if (intent.action != Intent.ACTION_BOOT_COMPLETED) return
         val graph = context.graph
+        val restore: suspend () -> Unit = when (intent.action) {
+            Intent.ACTION_BOOT_COMPLETED -> {
+                { if (graph.settings.data.first().autoStartOnBoot) graph.forwarder.activate() }
+            }
+            Intent.ACTION_MY_PACKAGE_REPLACED -> graph::reconcileKeepAlive
+            else -> return
+        }
         val pending = goAsync()
         graph.scope.launch {
             try {
-                if (graph.settings.data.first().autoStartOnBoot) graph.forwarder.activate()
+                restore()
             } finally {
                 pending.finish()
             }
