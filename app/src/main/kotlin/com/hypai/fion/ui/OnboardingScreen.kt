@@ -1,6 +1,5 @@
 package com.hypai.fion.ui
 
-import android.content.Intent
 import androidx.activity.compose.BackHandler
 import androidx.annotation.StringRes
 import androidx.compose.animation.AnimatedContent
@@ -223,7 +222,7 @@ private fun StepPage(plan: List<Step>, index: Int, blocked: Boolean, onBlocked: 
         ) {
             PrimaryButton(stringResource(if (blocked) R.string.onb_open_settings else step.button), Modifier.fillMaxWidth()) {
                 when (val action = step.action) {
-                    is StepAction.Grant if blocked -> context.startActivity(context.appDetailsIntent().addFlags(Intent.FLAG_ACTIVITY_NEW_DOCUMENT))
+                    is StepAction.Grant if blocked -> context.startActivity(context.appDetailsIntent())
                     is StepAction.Grant -> request(action.group)
                     StepAction.ExemptBattery -> context.openBatteryExemption(context::startActivity)
                 }

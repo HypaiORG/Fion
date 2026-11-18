@@ -70,7 +70,7 @@ private fun Context.batteryExemptionIntent(): Intent =
     Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS, packageUri())
 
 fun Context.appDetailsIntent(): Intent =
-    Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, packageUri())
+    Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, packageUri()).addFlags(Intent.FLAG_ACTIVITY_NEW_DOCUMENT)
 
 fun Context.openBatteryExemption(launch: (Intent) -> Unit) {
     try {
