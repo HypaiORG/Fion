@@ -39,7 +39,7 @@ import androidx.compose.ui.unit.dp
 import com.hypai.fion.R
 import com.hypai.fion.platform.PermissionGroup
 import com.hypai.fion.platform.Readiness
-import com.hypai.fion.platform.batteryExemptionIntent
+import com.hypai.fion.platform.openBatteryExemption
 
 private sealed interface Control {
     data class Fix(@param:StringRes val action: Int, val onFix: () -> Unit) : Control
@@ -70,7 +70,7 @@ fun KeepAliveScreen(
     )
     val battery = Requirement(
         R.string.keep_battery, R.string.keep_battery_summary, readiness.batteryUnrestricted,
-        Control.Fix(R.string.keep_open_settings) { context.startActivity(context.batteryExemptionIntent()) },
+        Control.Fix(R.string.keep_open_settings) { context.openBatteryExemption(context::startActivity) },
     )
     val notification = Requirement(
         R.string.keep_notification,

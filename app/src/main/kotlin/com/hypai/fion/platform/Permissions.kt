@@ -2,6 +2,7 @@ package com.hypai.fion.platform
 
 import android.Manifest
 import android.app.NotificationManager
+import android.content.ActivityNotFoundException
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
@@ -65,10 +66,18 @@ fun Context.readiness(): Readiness = Readiness(
 
 private fun Context.packageUri(): Uri = Uri.fromParts("package", packageName, null)
 
-fun Context.batteryExemptionIntent(): Intent =
+private fun Context.batteryExemptionIntent(): Intent =
     Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS, packageUri())
 
 fun Context.appDetailsIntent(): Intent =
     Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, packageUri())
+
+fun Context.openBatteryExemption(launch: (Intent) -> Unit) {
+    try {
+        launch(batteryExemptionIntent())
+    } catch (_: ActivityNotFoundException) {
+        launch(appDetailsIntent())
+    }
+}
 
 fun Context.bootCount(): Int = Settings.Global.getInt(contentResolver, Settings.Global.BOOT_COUNT, 0)

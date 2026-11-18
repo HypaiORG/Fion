@@ -82,7 +82,7 @@ import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import com.hypai.fion.R
 import com.hypai.fion.platform.PermissionGroup
-import com.hypai.fion.platform.batteryExemptionIntent
+import com.hypai.fion.platform.openBatteryExemption
 
 private sealed interface StepAction {
     data class Grant(val group: PermissionGroup) : StepAction
@@ -202,7 +202,7 @@ fun OnboardingScreen(onFinish: () -> Unit) {
             PrimaryButton(stringResource(step.button), Modifier.fillMaxWidth()) {
                 when (val action = step.action) {
                     is StepAction.Grant -> request(action.group)
-                    StepAction.ExemptBattery -> settingsLauncher.launch(context.batteryExemptionIntent())
+                    StepAction.ExemptBattery -> context.openBatteryExemption(settingsLauncher::launch)
                 }
             }
             Box(
