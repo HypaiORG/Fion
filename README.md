@@ -30,7 +30,8 @@ English | [简体中文](README.zh-CN.md)
 
 - Fion sends no network requests other than pushes to the Bark server you configure.
 - No analytics, no crash reporting, no update checks. Dependencies are AndroidX and kotlinx only.
-- SMS and calls are parsed on the device. Message text and call details are never stored.
+- SMS and calls are parsed on the device. A push that fails temporarily waits on the phone for retry. A retry drops it once it is older than 24 hours.
+- Full details in the [privacy policy](docs/privacy.md).
 
 ## Requirements
 
