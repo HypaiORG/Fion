@@ -58,6 +58,8 @@
     <string name="settings_reset_summary">Clears local counters, can\'t be undone</string>
     <string name="settings_reset_text">All counters will be permanently erased.</string>
     <string name="settings_reset_confirm">Reset</string>
+    <string name="settings_privacy">Privacy policy</string>
+    <string name="settings_privacy_summary">What Fion reads and where it goes</string>
     <string name="settings_version">Version</string>
     <string name="settings_wiki_summary">How to install and use Bark</string>
     <string name="settings_open_in_browser">Open in browser</string>

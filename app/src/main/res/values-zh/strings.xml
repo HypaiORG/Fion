@@ -54,6 +54,8 @@
     <string name="settings_reset_summary">清空本机计数，不可恢复</string>
     <string name="settings_reset_text">所有计数将被清空，且无法恢复。</string>
     <string name="settings_reset_confirm">重置</string>
+    <string name="settings_privacy">隐私政策</string>
+    <string name="settings_privacy_summary">Fion 读取哪些数据、发往何处</string>
     <string name="settings_version">版本</string>
     <string name="settings_wiki_summary">Bark 的安装与使用说明</string>
     <string name="settings_open_in_browser">在浏览器中打开</string>

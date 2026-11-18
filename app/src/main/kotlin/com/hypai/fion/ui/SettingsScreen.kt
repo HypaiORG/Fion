@@ -42,6 +42,13 @@ import com.hypai.fion.platform.PermissionHealth
 import com.hypai.fion.platform.switchLanguage
 
 private const val BARK_WIKI = "https://bark.day.app/#/?id=bark"
+private const val PRIVACY_POLICY = "https://github.com/HypaiORG/Fion/blob/main/docs/privacy"
+
+private val Language.privacyPolicy: String
+    get() = when (this) {
+        Language.En -> "$PRIVACY_POLICY.md"
+        Language.Zh -> "$PRIVACY_POLICY.zh-CN.md"
+    }
 
 @Composable
 private fun Language.displayName(): String = stringResource(
@@ -67,6 +74,13 @@ fun SettingsScreen(
     val noBrowser = stringResource(R.string.settings_no_browser)
     var confirmReset by rememberSaveable { mutableStateOf(false) }
     var pickingLanguage by rememberSaveable { mutableStateOf(false) }
+    fun open(url: String) {
+        try {
+            uriHandler.openUri(url)
+        } catch (_: IllegalArgumentException) {
+            Toast.makeText(context, noBrowser, Toast.LENGTH_SHORT).show()
+        }
+    }
 
     ScreenScaffold(title = stringResource(R.string.settings_title), onBack = onBack) {
         GlassCard(padding = PaddingValues(0.dp)) {
@@ -148,21 +162,14 @@ fun SettingsScreen(
                 title = "Bark Wiki",
                 subtitle = stringResource(R.string.settings_wiki_summary),
                 leading = { IconBadge(Icons.Book) },
-                onClick = {
-                    try {
-                        uriHandler.openUri(BARK_WIKI)
-                    } catch (_: IllegalArgumentException) {
-                        Toast.makeText(context, noBrowser, Toast.LENGTH_SHORT).show()
-                    }
-                },
-            ) {
-                Icon(
-                    Icons.External,
-                    contentDescription = stringResource(R.string.settings_open_in_browser),
-                    Modifier.size(20.dp),
-                    tint = Palette.Muted,
-                )
-            }
+                onClick = { open(BARK_WIKI) },
+            ) { ExternalMark() }
+            ListRow(
+                title = stringResource(R.string.settings_privacy),
+                subtitle = stringResource(R.string.settings_privacy_summary),
+                leading = { IconBadge(Icons.Shield) },
+                onClick = { open(language.privacyPolicy) },
+            ) { ExternalMark() }
             ListRow(
                 title = stringResource(R.string.settings_version),
                 subtitle = "",
@@ -206,6 +213,11 @@ fun SettingsScreen(
             onDismiss = { confirmReset = false },
         )
     }
+}
+
+@Composable
+private fun ExternalMark() {
+    Icon(Icons.External, contentDescription = stringResource(R.string.settings_open_in_browser), Modifier.size(20.dp), tint = Palette.Muted)
 }
 
 @Composable
