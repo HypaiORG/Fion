@@ -130,7 +130,7 @@
     <string name="perm_sheet_call_title">Grant call log access</string>
     <string name="perm_sheet_sms_use">To forward SMS</string>
     <string name="perm_sheet_call_use">To detect missed calls</string>
-    <string name="perm_sheet_note">Parsed locally, pushed to Bark</string>
+    <string name="perm_sheet_note">Sent to the Bark server you set</string>
     <string name="perm_sheet_start">Start forwarding</string>
 
     <string name="keep_grant">Grant</string>
@@ -161,12 +161,12 @@
 
     <string name="onb_sms_title">Allow reading\nSMS</string>
     <string name="onb_sms_button">Allow SMS access</string>
-    <string name="onb_sms_note_title">Read only, never stored</string>
-    <string name="onb_sms_note">Parsed locally, pushed to Bark</string>
+    <string name="onb_sms_note_title">Sent to your Bark server</string>
+    <string name="onb_sms_note">Not kept once delivered</string>
     <string name="onb_call_title">Allow reading\ncall log</string>
     <string name="onb_call_button">Allow call log access</string>
     <string name="onb_call_note_title">Missed calls only</string>
-    <string name="onb_call_note">Reads caller number, time, and SIM</string>
+    <string name="onb_call_note">Sent to your Bark server</string>
     <string name="onb_phone_title">Allow reading\nyour number</string>
     <string name="onb_phone_button">Allow number access</string>
     <string name="onb_phone_note_title">Your own number only</string>

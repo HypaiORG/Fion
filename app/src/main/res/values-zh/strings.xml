@@ -126,7 +126,7 @@
     <string name="perm_sheet_call_title">转发未接来电需要授权</string>
     <string name="perm_sheet_sms_use">用于转发新短信</string>
     <string name="perm_sheet_call_use">用于识别未接来电</string>
-    <string name="perm_sheet_note">仅在本机解析，直接推送到 Bark</string>
+    <string name="perm_sheet_note">发送到你设置的 Bark 服务器</string>
     <string name="perm_sheet_start">开始转发</string>
 
     <string name="keep_grant">授权</string>
@@ -157,12 +157,12 @@
 
     <string name="onb_sms_title">允许读取\n短信</string>
     <string name="onb_sms_button">允许读取短信</string>
-    <string name="onb_sms_note_title">只读取，不保存原文</string>
-    <string name="onb_sms_note">短信仅在本机解析，直接推送到 Bark</string>
+    <string name="onb_sms_note_title">发往你设置的 Bark</string>
+    <string name="onb_sms_note">送达后不在本机保留</string>
     <string name="onb_call_title">允许读取\n通话记录</string>
     <string name="onb_call_button">允许读取通话记录</string>
     <string name="onb_call_note_title">只关注未接来电</string>
-    <string name="onb_call_note">读取未接来电的号码、时间与本机号码</string>
+    <string name="onb_call_note">发往你设置的 Bark</string>
     <string name="onb_phone_title">允许读取\n本机号码</string>
     <string name="onb_phone_button">允许读取本机号码</string>
     <string name="onb_phone_note_title">仅读取本机号码</string>
