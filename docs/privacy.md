@@ -9,7 +9,7 @@
 
 ## 1. Scope and Developer Entity
 
-This Privacy Policy explains how **HYPAI ORG** ("we", "us", or "our") handles personal and sensitive user data in the Android application **Fion** ("the App"). Fion forwards incoming SMS messages and missed call notifications from your Android device to a Bark push server that you configure.
+This Privacy Policy explains how **HYPAI ORG** ("we", "us", or "our") handles personal and sensitive user data in the Android application **Fion**. Fion forwards incoming SMS messages and missed call notifications from your Android device to a Bark push server that you configure.
 
 By installing Fion, granting runtime permissions, or enabling forwarding, you acknowledge the data practices described in this Privacy Policy. Fion does not require or support user account registration.
 
@@ -17,15 +17,15 @@ By installing Fion, granting runtime permissions, or enabling forwarding, you ac
 
 Fion accesses only the device data required to deliver its core forwarding functionality.
 
-| Data Accessed | Android Permission | Purpose and Limit |
+| Data | Permission | Purpose & Limit |
 | :--- | :--- | :--- |
-| Incoming SMS sender address, message text, and timestamp | `RECEIVE_SMS` | Build and send the SMS push notification. Fion never reads your existing SMS inbox. |
-| Missed call phone number, call timestamp, SIM account reference, and daily missed call count for that number | `READ_CALL_LOG` | Build and send the missed call push notification. Fion ignores answered and outgoing calls. |
-| SIM phone number, carrier name, slot index, and display name | `READ_PHONE_STATE`, `READ_PHONE_NUMBERS` | Identify which SIM received the SMS or missed call. Fion never places, answers, or manages phone calls. |
+| Incoming SMS sender, message text, and timestamp | `RECEIVE_SMS` | Build and send the SMS push. Fion never reads your SMS inbox. |
+| Missed call number, timestamp, SIM reference, and daily missed count | `READ_CALL_LOG` | Build and send the missed call push. Answered and outgoing calls are ignored. |
+| SIM phone number, carrier, slot index, and display name | `READ_PHONE_STATE`, `READ_PHONE_NUMBERS` | Identify which SIM received the alert. Fion never places, answers, or manages calls. |
 
 Fion accesses and forwards SMS messages and missed calls only after you grant the corresponding permissions, enable forwarding, and save a valid Bark server configuration. If you revoke `READ_CALL_LOG` and grant it again later, Fion may forward missed calls recorded during the period when access was revoked.
 
-HYPAI ORG operates no backend server for Fion and collects no user data. We do not receive, access, sell, rent, or trade your SMS content, call logs, SIM details, or device identifiers. Fion includes no third-party advertising SDKs, analytics trackers, crash reporting tools, or automatic update checks.
+HYPAI ORG operates no backend server for Fion and collects no user data. We do not receive, access, sell, rent, or share your SMS content, call logs, SIM details, or device identifiers. Fion includes no third-party advertising SDKs, analytics trackers, crash reporting tools, or automatic update checks.
 
 ## 3. Data Transmission and Third-Party Services
 
@@ -41,7 +41,7 @@ Once a push notification leaves your device, its handling, logging, retention, a
 
 Fion stores the following data solely on your Android device to operate reliably.
 
-- **Application settings**. Your Bark server address, Device Key, optional AES encryption key and cipher settings, forwarding toggles, push templates, notification sound, alert level, archive preference, language, and boot auto-start preference.
+- **Application settings**. Your Bark server address, Device Key, optional AES encryption key and cipher settings, forwarding toggles, push templates, notification sound, notification level, archive preference, language, and boot auto-start preference.
 - **Forwarding statistics**. Total forwarded SMS count, missed call count, failed delivery count, average delivery latency, and per-SIM delivery counts with SIM display name and carrier.
 - **Offline retry queue**. Rendered push title, body, SIM label, timestamp, and message ID for notifications that fail temporarily due to network or server errors.
 - **Internal runtime state**. Onboarding completion flag, the last processed call-log record ID watermark, and a locally generated secret used to compute deduplication message IDs.
@@ -51,7 +51,7 @@ Fion stores the following data solely on your Android device to operate reliably
 We apply technical safeguards in transit and on your device to protect sensitive user data.
 
 - **Encryption in transit**. Fion enforces HTTPS when connecting to the configured Bark server.
-- **Optional end-to-end payload encryption**. When you configure an AES encryption key (AES-128, AES-192, or AES-256 in CBC, GCM, or ECB mode), Fion encrypts the notification payload (title, body, group, sound, alert level, and archive flag) on your device before transmission. The `device_key`, deduplication message `id`, and initialization vector `iv` (when used by CBC or GCM) remain unencrypted so Bark can route and decrypt the notification. Only a party holding your AES key, normally your Bark app, can decrypt the payload.
+- **Optional end-to-end payload encryption**. When you configure an AES encryption key (AES-128, AES-192, or AES-256 in CBC, GCM, or ECB mode), Fion encrypts the notification payload (title, body, group, sound, notification level, and archive flag) on your device before transmission. The `device_key`, deduplication message `id`, and initialization vector `iv` (when used by CBC or GCM) remain unencrypted so Bark can route and decrypt the notification. Only a party holding your AES key, normally your Bark app, can decrypt the payload.
 - **On-device isolation**. All local data is stored exclusively inside Fion's Android private app storage, isolated by the operating system. Android cloud backup (`allowBackup="false"`) and device-to-device data transfer are disabled so settings, keys, statistics, and queued notifications do not leave your device through system backup or migration.
 
 ## 6. Data Retention and Deletion
