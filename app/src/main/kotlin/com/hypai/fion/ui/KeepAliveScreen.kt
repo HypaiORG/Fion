@@ -62,11 +62,7 @@ fun KeepAliveScreen(
     fun grant(group: PermissionGroup) = Control.Fix(R.string.keep_grant) { request(group) }
 
     val permissions = listOf(
-        Requirement(
-            R.string.keep_sms,
-            if (readiness.sms) R.string.keep_sms_ready else R.string.keep_sms_restricted,
-            readiness.sms, grant(PermissionGroup.Sms),
-        ),
+        Requirement(R.string.keep_sms, R.string.keep_sms_summary, readiness.sms, grant(PermissionGroup.Sms)),
         Requirement(R.string.keep_call_log, R.string.keep_call_log_summary, readiness.callLog, grant(PermissionGroup.CallLog)),
         Requirement(R.string.keep_phone, R.string.keep_phone_summary, readiness.phone, grant(PermissionGroup.Phone)),
     )
