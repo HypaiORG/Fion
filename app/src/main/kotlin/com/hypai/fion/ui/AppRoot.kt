@@ -45,6 +45,7 @@ import com.hypai.fion.ui.screen.HomeScreen
 import com.hypai.fion.ui.screen.KeepAliveScreen
 import com.hypai.fion.ui.screen.SettingsScreen
 import com.hypai.fion.ui.screen.onboarding.OnboardingScreen
+import com.hypai.fion.ui.screen.privacy.PrivacyScreen
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
@@ -59,6 +60,7 @@ sealed interface Screen : NavKey {
     @Serializable data object Settings : Screen
     @Serializable data object Bark : Screen
     @Serializable data object KeepAlive : Screen
+    @Serializable data object Privacy : Screen
     @Serializable data class Forward(val kind: EventKind) : Screen
 }
 
@@ -196,6 +198,14 @@ private fun AppRoot() {
                     readiness = readiness.value,
                     persistentNotification = current.settings.persistentNotification,
                     onPersistentNotificationChange = { on -> model.updateSettings { it.copy(persistentNotification = on) } },
+                    onBack = goBack,
+                )
+            }
+            entry<Screen.Privacy> {
+                val current = model.state.collectAsStateWithLifecycle().value ?: return@entry
+                PrivacyScreen(
+                    settings = current.settings,
+                    readiness = readiness.value,
                     onBack = goBack,
                 )
             }

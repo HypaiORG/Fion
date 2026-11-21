@@ -58,6 +58,8 @@ import com.hypai.fion.ui.design.SwitchRow
 import com.hypai.fion.ui.design.Type
 
 private const val BARK_WIKI = "https://bark.day.app/#/?id=bark"
+private const val PRIVACY_POLICY_EN = "https://fion.hypai.org/privacy"
+private const val PRIVACY_POLICY_ZH = "https://fion.hypai.org/zh/privacy"
 private const val GITHUB = "https://github.com/HypaiORG/Fion"
 
 @Composable
@@ -166,6 +168,21 @@ fun SettingsScreen(
             )
         }
 
+        RowsCard {
+            ListRow(
+                title = stringResource(R.string.settings_privacy),
+                subtitle = stringResource(R.string.settings_privacy_summary),
+                leading = { IconBadge(Icons.Lock) },
+                trailing = { Chevron() },
+                onClick = { onOpen(Screen.Privacy) },
+            )
+            ListRow(
+                title = stringResource(R.string.settings_privacy_policy),
+                subtitle = stringResource(R.string.settings_privacy_policy_summary),
+                leading = { IconBadge(Icons.Scroll) },
+                onClick = { open(if (language == Language.Zh) PRIVACY_POLICY_ZH else PRIVACY_POLICY_EN) },
+            ) { ExternalMark() }
+        }
 
         RowsCard {
             ListRow(
