@@ -60,6 +60,9 @@
     <string name="settings_reset_confirm">Reset</string>
     <string name="settings_privacy">Privacy protection</string>
     <string name="settings_privacy_summary">Permissions &amp; privacy guide</string>
+    <string name="settings_privacy_policy">Privacy policy</string>
+    <string name="settings_privacy_policy_summary">Full terms on the Fion website</string>
+    <string name="settings_github_summary">Source code &amp; issue reports</string>
     <string name="settings_version">Version</string>
     <string name="settings_wiki_summary">How to set up and use Bark</string>
     <string name="settings_open_in_browser">Open in browser</string>

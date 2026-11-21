@@ -56,6 +56,9 @@
     <string name="settings_reset_confirm">确认重置</string>
     <string name="settings_privacy">隐私保护</string>
     <string name="settings_privacy_summary">图解所需权限与隐私保护方式</string>
+    <string name="settings_privacy_policy">隐私政策</string>
+    <string name="settings_privacy_policy_summary">在 Fion 官网查看完整条款</string>
+    <string name="settings_github_summary">查看开源代码与反馈问题</string>
     <string name="settings_version">版本</string>
     <string name="settings_wiki_summary">查看 Bark 安装与配置指南</string>
     <string name="settings_open_in_browser">在浏览器中打开</string>

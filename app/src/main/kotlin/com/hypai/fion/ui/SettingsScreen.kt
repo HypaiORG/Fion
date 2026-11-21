@@ -42,6 +42,8 @@ import com.hypai.fion.platform.PermissionHealth
 import com.hypai.fion.platform.switchLanguage
 
 private const val BARK_WIKI = "https://bark.day.app/#/?id=bark"
+private const val PRIVACY_POLICY = "https://fion.hypai.org/privacy"
+private const val GITHUB = "https://github.com/HypaiORG/Fion"
 
 @Composable
 private fun Language.displayName(): String = stringResource(
@@ -141,9 +143,6 @@ fun SettingsScreen(
                 onCheckedChange = { on -> onUpdate { it.copy(autoStartOnBoot = on) } },
                 leading = { IconBadge(Icons.Power) },
             )
-        }
-
-        RowsCard {
             ListRow(
                 title = stringResource(R.string.settings_language),
                 subtitle = language.displayName(),
@@ -151,6 +150,25 @@ fun SettingsScreen(
                 trailing = { Chevron() },
                 onClick = { pickingLanguage = true },
             )
+        }
+
+        RowsCard {
+            ListRow(
+                title = stringResource(R.string.settings_privacy),
+                subtitle = stringResource(R.string.settings_privacy_summary),
+                leading = { IconBadge(Icons.Lock) },
+                trailing = { Chevron() },
+                onClick = { onOpen(Screen.Privacy) },
+            )
+            ListRow(
+                title = stringResource(R.string.settings_privacy_policy),
+                subtitle = stringResource(R.string.settings_privacy_policy_summary),
+                leading = { IconBadge(Icons.Scroll) },
+                onClick = { open(PRIVACY_POLICY) },
+            ) { ExternalMark() }
+        }
+
+        RowsCard {
             ListRow(
                 title = "Bark Wiki",
                 subtitle = stringResource(R.string.settings_wiki_summary),
@@ -158,12 +176,11 @@ fun SettingsScreen(
                 onClick = { open(BARK_WIKI) },
             ) { ExternalMark() }
             ListRow(
-                title = stringResource(R.string.settings_privacy),
-                subtitle = stringResource(R.string.settings_privacy_summary),
-                leading = { IconBadge(Icons.Shield) },
-                trailing = { Chevron() },
-                onClick = { onOpen(Screen.Privacy) },
-            )
+                title = "GitHub",
+                subtitle = stringResource(R.string.settings_github_summary),
+                leading = { IconBadge(Icons.GitHub) },
+                onClick = { open(GITHUB) },
+            ) { ExternalMark() }
             ListRow(
                 title = stringResource(R.string.settings_version),
                 subtitle = "",
