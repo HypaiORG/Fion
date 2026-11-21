@@ -14,13 +14,13 @@
   <img src="docs/images/zh/home.jpg" width="19%" alt="首页">
   <img src="docs/images/zh/settings.jpg" width="19%" alt="设置">
   <img src="docs/images/zh/forward.jpg" width="19%" alt="短信转发">
-  <img src="docs/images/zh/bark.jpg" width="19%" alt="Bark 推送通道">
-  <img src="docs/images/zh/keep.jpg" width="19%" alt="后台保活与权限">
+  <img src="docs/images/zh/bark.jpg" width="19%" alt="Bark 推送设置">
+  <img src="docs/images/zh/keep.jpg" width="19%" alt="权限与后台运行">
 </p>
 
 ## 功能
 
-- 短信与未接来电分别转发，各自设置模板、分组、铃声、通知级别与是否保存历史。
+- 短信与未接来电分别转发，各自设置模板、通知分组、提示音、提醒级别与是否保存历史记录。
 - 支持 Bark 推送加密，AES-128、AES-192、AES-256 搭配 CBC、ECB、GCM。
 - 区分双卡，推送内容标明接收的 SIM 卡与本机号码。
 - 断网时消息进入待发队列，联网后自动补发。
@@ -28,9 +28,9 @@
 
 ## 隐私
 
-- 除推送到你配置的 Bark 服务器外，Fion 不发送任何网络请求。
+- 除推送到你配置的 Bark 服务器外，飞鸿不发送任何网络请求。
 - 不含统计分析、崩溃上报与版本检查，依赖仅有 AndroidX 与 kotlinx。
-- 短信与来电只在本机解析。暂时发送失败的推送暂存本机等待重试，重试处理到超过 24 小时的记录时将其丢弃。
+- 短信与来电只在本机解析。暂时发送失败的推送暂存本机等待重试，超过 24 小时仍未发出的记录会在重试时自动丢弃。
 - 完整说明见[隐私政策](docs/privacy.zh-CN.md)。
 
 ## 系统要求
@@ -40,8 +40,8 @@
 ## 安装
 
 1. 从 [Releases](../../releases) 下载 `Fion-x.y.z.apk` 并安装。
-2. 打开 App，按引导授予短信、通话记录、本机号码、通知与后台运行权限。
-3. 进入「设置」→「Bark 推送通道」，填写服务器与 Device Key。
+2. 打开 App，按引导授予短信、通话记录、SIM 卡信息、通知与后台运行权限。
+3. 进入「设置」→「Bark 推送设置」，填写服务器地址与 Device Key。
 
 ### 短信权限被拒绝时
 

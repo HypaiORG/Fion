@@ -14,13 +14,13 @@ English | [简体中文](README.zh-CN.md)
   <img src="docs/images/en/home.jpg" width="19%" alt="Home">
   <img src="docs/images/en/settings.jpg" width="19%" alt="Settings">
   <img src="docs/images/en/forward.jpg" width="19%" alt="SMS forwarding">
-  <img src="docs/images/en/bark.jpg" width="19%" alt="Bark channel">
-  <img src="docs/images/en/keep.jpg" width="19%" alt="Background and permissions">
+  <img src="docs/images/en/bark.jpg" width="19%" alt="Bark push settings">
+  <img src="docs/images/en/keep.jpg" width="19%" alt="Permissions and background">
 </p>
 
 ## Features
 
-- Forward SMS and missed calls separately, each with its own template, group, sound, interruption level and history setting.
+- Forward SMS and missed calls separately, each with its own template, notification group, sound, alert level and history setting.
 - Encrypt pushes with AES-128, AES-192 or AES-256 in CBC, ECB or GCM mode.
 - Tell dual SIMs apart. Each push names the receiving SIM and its number.
 - Queue messages while offline and resend them once the network is back.
@@ -30,7 +30,7 @@ English | [简体中文](README.zh-CN.md)
 
 - Fion sends no network requests other than pushes to the Bark server you configure.
 - No analytics, no crash reporting, no update checks. Dependencies are AndroidX and kotlinx only.
-- SMS and calls are parsed on the device. A push that fails temporarily waits on the phone for retry. A retry drops it once it is older than 24 hours.
+- SMS and calls are parsed on the device. A push that fails temporarily waits on the phone for retry, and queued messages older than 24 hours are dropped automatically on retry.
 - Full details in the [privacy policy](docs/privacy.md).
 
 ## Requirements
@@ -40,8 +40,8 @@ English | [简体中文](README.zh-CN.md)
 ## Install
 
 1. Download `Fion-x.y.z.apk` from [Releases](../../releases) and install it.
-2. Open the app and grant SMS, call log, phone number, notification and background permissions as guided.
-3. Go to Settings → Bark channel and enter your server and Device Key.
+2. Open the app and grant SMS, call log, SIM info, notification and background permissions as guided.
+3. Go to Settings → Bark push settings and enter your server address and Device Key.
 
 ### If SMS access is denied
 
