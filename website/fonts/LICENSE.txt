@@ -1,0 +1,9 @@
+Jost*
+Copyright (c) 2020 indestructible type* (https://indestructibletype.com)
+
+Licensed under the SIL Open Font License, Version 1.1.
+Full licence text: https://openfontlicense.org
+
+The file jost-600-latin.woff2 in this directory is the weight-600, latin-subset
+build served by Google Fonts (https://fonts.google.com/specimen/Jost), copied
+here so the site loads no third-party resources at runtime.

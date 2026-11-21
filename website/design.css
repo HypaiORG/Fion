@@ -1,0 +1,207 @@
+/* ══════════════════════════════════════════════════════════════════════════
+   hypai design system
+
+   CANONICAL SOURCE. This file is shared verbatim by every hypai site:
+
+     hypai.org      →  Hypai/design.css              (this file)
+     x.hypai.org    →  X/website/design.css          (a synced copy)
+
+   Edit it HERE and only here. To push a change out to a consumer, run that
+   repo's `node sync-design.mjs`, which copies this file and re-stamps its
+   lock. Both repos verify the copy at build time and refuse to build a
+   modified one, so drift cannot ship silently.
+
+   What belongs here: anything two sites must agree on — type, colour, the
+   paper ground, the bloom, the arc field, the nav shell, the footer.
+   What does not: page layout, product-specific components, per-site
+   responsive rules. Those live in each site's own stylesheet.
+   ══════════════════════════════════════════════════════════════════════════ */
+
+*,*::before,*::after{margin:0;padding:0;box-sizing:border-box}
+
+/* Self-hosted so the sites load nothing from a third party — hypai.org's
+   principles page claims exactly that, and a Google Fonts CDN request would
+   contradict it. */
+@font-face {
+  font-family: "Jost";
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: url("/fonts/jost-600-latin.woff2") format("woff2");
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA,
+    U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193,
+    U+2212, U+2215, U+FEFF, U+FFFD;
+}
+
+:root {
+  --bg: #f6f2eb;
+  --ink: #191310;
+  --text: #1a1814;
+  --text-secondary: #6b645c;
+  --text-tertiary: rgba(26, 24, 20, 0.45);
+  --line: rgba(26, 24, 20, 0.13);
+  --line-soft: rgba(26, 24, 20, 0.07);
+  --accent: #8f5248;
+
+  /* the wordmark's five colours — the only chromatic material in the system */
+  --v: #8b5fbf; --m: #b8567f; --r: #d4626a; --c: #e08a5c; --a: #f0b05e;
+
+  --shell: min(1180px, calc(100vw - 44px));
+  --nav-h: 62px;
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+
+  --font-sans: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Roboto, Helvetica, "PingFang SC", "Noto Sans SC", "Microsoft YaHei", Arial, sans-serif;
+  --font-mono: ui-monospace, "SF Mono", SFMono-Regular, Menlo, "Roboto Mono", monospace;
+  /* The wordmark is drawn from circles and straight stems, which is precisely
+     how a geometric sans is built — so headings and the logo share one
+     construction. Jost is the open cut of Futura; the local names come first so
+     machines that have the real thing skip the download. Jost carries latin
+     only: Han falls through to PingFang SC, which is why headings that can hold
+     Chinese must reset their latin tracking. */
+  --font-geo: "Futura", "Avenir Next", "Jost", "Century Gothic", "PingFang SC", "Noto Sans SC", var(--font-sans);
+
+  --noise: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='200'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.6' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.6'/%3E%3C/svg%3E");
+}
+
+/* `clip`, not `hidden`: overflow on body propagates up to the viewport and
+   leaves body itself scrolling, while `hidden` on html creates a scroll
+   container that silently kills the sticky nav. `clip` does neither. */
+html {
+  -webkit-text-size-adjust: 100%;
+  color-scheme: light;
+  background: var(--bg);
+  scroll-padding-top: 78px;
+  overflow-x: clip;
+}
+
+body {
+  font-family: var(--font-sans);
+  color: var(--text);
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  min-height: 100vh;
+  overflow-x: clip;
+  position: relative;   /* the bloom anchors to the page, not to a section */
+}
+
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  z-index: -2;
+  pointer-events: none;
+  background-image:
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='220' height='220'%3E%3Cfilter id='g'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='1' seed='3' stitchTiles='stitch'/%3E%3CfeColorMatrix type='matrix' values='0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0.05 0.002'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23g)'/%3E%3C/svg%3E"),
+    linear-gradient(172deg, #faf7f1 0%, #f5f0e7 52%, #efe9dd 100%);
+  background-size: 220px 220px, auto;
+}
+
+a { color: inherit; text-decoration: none; }
+::selection { background: rgba(143, 82, 72, 0.16); }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; border-radius: 3px; }
+
+/* ═══ ARC FIELD ════════════════════════════════════════════════
+   The wordmark's geometry — a round-capped stroke bent on a fixed
+   radius — tiled. Scoped to the hero and faded out: run across the
+   whole page it reads as wallpaper rather than as texture. */
+
+.pat-arc {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='64' height='64'%3E%3Cg fill='none' stroke='%238f5248' stroke-width='1' opacity='0.17'%3E%3Cpath d='M0 32a32 32 0 0 0 32-32'/%3E%3Cpath d='M64 32a32 32 0 0 0-32 32'/%3E%3C/g%3E%3C/svg%3E");
+  background-size: 64px 64px;
+}
+
+.hero-pattern {
+  position: absolute; inset: 0; z-index: 0; pointer-events: none;
+  -webkit-mask-image: radial-gradient(120% 92% at 82% 42%, #000 0%, transparent 66%);
+  mask-image: radial-gradient(120% 92% at 82% 42%, #000 0%, transparent 66%);
+}
+
+/* ═══ BLOOM ════════════════════════════════════════════════════
+   Belongs to the page, not to a section: parented inside one it gets
+   clipped at the nav's bottom edge and leaves a hard seam across the
+   top of the site. The gradient is blurred on ::before and the grain
+   sits un-blurred on ::after — one element carries one filter, and
+   blurring grain erases the only thing it is there for. */
+
+.bloom { position: absolute; top: -430px; left: -420px; width: 1180px; height: 940px; z-index: -1; pointer-events: none; }
+
+.bloom::before {
+  content: ''; position: absolute; inset: 0;
+  background:
+    radial-gradient(40% 46% at 32% 50%, rgba(240, 176, 94, .78), transparent 66%),
+    radial-gradient(38% 42% at 58% 30%, rgba(212, 98, 106, .6), transparent 68%),
+    radial-gradient(36% 40% at 50% 74%, rgba(139, 95, 191, .52), transparent 70%),
+    radial-gradient(32% 36% at 74% 56%, rgba(184, 86, 127, .4), transparent 72%),
+    radial-gradient(26% 30% at 84% 28%, rgba(224, 138, 92, .3), transparent 74%);
+  filter: blur(70px);
+}
+
+/* masked to the gradient's silhouette — an unmasked overlay paints the
+   element's whole box and reads as a grey rectangle */
+.bloom::after {
+  content: ''; position: absolute; inset: 0;
+  background-image: var(--noise);
+  mix-blend-mode: overlay; opacity: .85;
+  -webkit-mask-image: radial-gradient(44% 50% at 46% 50%, #000 10%, transparent 72%);
+  mask-image: radial-gradient(44% 50% at 46% 50%, #000 10%, transparent 72%);
+}
+
+/* ═══ NAV SHELL ════════════════════════════════════════════════
+   Translucent enough that the bloom reads straight through it; an
+   opaque bar here cuts the top of the page in half. Each site fills
+   the bar with its own contents. */
+
+.nav {
+  position: sticky; top: 0; z-index: 60;
+  border-bottom: 0.5px solid var(--line-soft);
+  background: rgba(247, 243, 236, 0.5);
+  backdrop-filter: blur(18px) saturate(1.4);
+  -webkit-backdrop-filter: blur(18px) saturate(1.4);
+}
+
+.nav-inner {
+  width: var(--shell); margin: 0 auto; height: var(--nav-h);
+  display: flex; align-items: center; justify-content: space-between; gap: 20px;
+}
+
+/* ═══ FOOTER ═══════════════════════════════════════════════════ */
+
+footer {
+  position: relative; z-index: 1;
+  margin-top: clamp(60px, 7vw, 104px);
+  border-top: 0.5px solid var(--line);
+}
+
+.footer-inner {
+  width: var(--shell); margin: 0 auto;
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 16px; flex-wrap: wrap; padding: 26px 0 30px;
+}
+
+.footer-inner a, .footer-copy {
+  font-family: var(--font-mono); font-size: 11px; letter-spacing: .05em; color: var(--text-tertiary);
+}
+
+.footer-links { display: flex; gap: 20px; flex-wrap: wrap; align-items: center; }
+.footer-links a { transition: color .2s ease; }
+.footer-links a:hover { color: var(--text); }
+
+/* the signature: the org wordmark, oversized and cropped by the viewport */
+.watermark { width: var(--shell); margin: 0 auto; overflow: hidden; }
+.watermark img { display: block; width: 100%; height: auto; opacity: .085; margin-bottom: -3%; }
+
+@media (max-width: 620px) {
+  .footer-inner { flex-direction: column; align-items: flex-start; }
+}
+
+/* ═══ REDUCED MOTION ═══════════════════════════════════════════ */
+
+@media (prefers-reduced-motion: reduce) {
+  html { scroll-behavior: auto; }
+  *, *::before, *::after {
+    animation-duration: .01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: .01ms !important;
+  }
+}
