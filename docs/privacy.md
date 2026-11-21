@@ -1,56 +1,94 @@
 # Fion Privacy Policy
 
-Effective date: November 18, 2026
+| Item | Details |
+| :--- | :--- |
+| Effective Date | November 21, 2026 |
+| Application | Fion (Android) |
+| Developer Entity | HYPAI ORG |
+| Privacy Contact | <support@hypai.org> |
 
-Fion forwards SMS and missed calls from your Android phone to a Bark server that you choose. This policy lists the data Fion reads, where it goes and how long it stays.
+## 1. Scope and Developer Entity
 
-## Data Fion reads
+This Privacy Policy explains how **HYPAI ORG** ("we", "us", or "our") handles personal and sensitive user data in the Android application **Fion** ("the App"). Fion forwards incoming SMS messages and missed call notifications from your Android device to a Bark push server that you configure.
 
-| Data | Android permission | Purpose |
+By installing Fion, granting runtime permissions, or enabling forwarding, you acknowledge the data practices described in this Privacy Policy. Fion does not require or support user account registration.
+
+## 2. Personal and Sensitive Data Accessed
+
+Fion accesses only the device data required to deliver its core forwarding functionality.
+
+| Data Accessed | Android Permission | Purpose and Limit |
 | :--- | :--- | :--- |
-| Incoming SMS sender and text | `RECEIVE_SMS` | Build the SMS push |
-| Missed call number, time and the number of missed calls from that number today | `READ_CALL_LOG` | Build the missed call push |
-| SIM phone number, carrier and display name | `READ_PHONE_STATE`, `READ_PHONE_NUMBERS` | Show which SIM received the event |
+| Incoming SMS sender address, message text, and timestamp | `RECEIVE_SMS` | Build and send the SMS push notification. Fion never reads your existing SMS inbox. |
+| Missed call phone number, call timestamp, SIM account reference, and daily missed call count for that number | `READ_CALL_LOG` | Build and send the missed call push notification. Fion ignores answered and outgoing calls. |
+| SIM phone number, carrier name, slot index, and display name | `READ_PHONE_STATE`, `READ_PHONE_NUMBERS` | Identify which SIM received the SMS or missed call. Fion never places, answers, or manages phone calls. |
 
-Fion forwards SMS and missed calls after you grant access, while forwarding is on and a valid Bark channel is set. If you revoke call log access and grant it again, Fion may forward missed calls from the time in between. Fion never forwards answered or outgoing calls.
+Fion accesses and forwards SMS messages and missed calls only after you grant the corresponding permissions, enable forwarding, and save a valid Bark server configuration. If you revoke `READ_CALL_LOG` and grant it again later, Fion may forward missed calls recorded during the period when access was revoked.
 
-## Where the data goes
+HYPAI ORG operates no backend server for Fion and collects no user data. We do not receive, access, sell, rent, or trade your SMS content, call logs, SIM details, or device identifiers. Fion includes no third-party advertising SDKs, analytics trackers, crash reporting tools, or automatic update checks.
 
-- Fion sends each push over HTTPS to the Bark server you enter in Settings → Bark channel. If that server answers with an HTTPS redirect, Fion follows it, so the push can reach another domain chosen by that server.
-- The default server `api.day.app` is run by the Bark project, not by Fion. A self-hosted server is run by you.
-- The Bark server delivers the push to your Apple devices through Apple Push Notification service.
-- If you set an encryption key, Fion encrypts the notification content with AES before it leaves the phone. The Device Key and a message ID stay unencrypted so Bark can route the push. Only someone holding your key, normally your Bark app, can decrypt the content.
-- Fion has no server of its own. Fion's developer receives no data.
+## 3. Data Transmission and Third-Party Services
 
-## Data stored on the phone
+Fion transmits notification data outside your device only through the delivery path you configure.
 
-- Your settings, including the Bark server, Device Key, encryption key and push templates.
-- Statistics, including forwarded counts, failure count, average latency and per-SIM counts with SIM name and carrier.
-- Unsent pushes. A push that fails temporarily waits in a local queue and is retried once the network is back. When a retry reaches a queued push older than 24 hours, Fion drops it. A push the server rejects permanently is dropped at once.
+- **User-Configured Bark Server**. Fion sends each push notification over HTTPS (`POST /push`) to the server entered in `Settings › Bark push settings`. If that server returns an HTTP redirect, Fion follows the redirect, which may route the request to another host chosen by that server.
+- **Default and Self-Hosted Servers**. The default server `api.day.app` is operated independently by the Bark project, not by HYPAI ORG. Any self-hosted Bark server is operated by you or your chosen host.
+- **Apple Push Notification service (APNs)**. The Bark server relays the notification to your Apple devices through APNs, operated by Apple Inc.
 
-Fion keeps this data in its private app storage. Android backup is disabled, so the data never leaves the phone through cloud backup.
+Once a push notification leaves your device, its handling, logging, retention, and deletion are governed by the operator of your chosen Bark server and Apple Inc. HYPAI ORG has no control over third-party servers and cannot access or delete data stored on them. Review the privacy policies of your Bark server operator and Apple Inc. before transmitting sensitive content.
 
-## What Fion does not do
+## 4. Data Stored on Your Device
 
-- Fion does not include analytics, advertising, crash reporting or update checks.
-- Fion does not sell data or send it anywhere outside the delivery path above.
-- Fion does not upload your SMS inbox or call history.
+Fion stores the following data solely on your Android device to operate reliably.
 
-## Your control
+- **Application settings**. Your Bark server address, Device Key, optional AES encryption key and cipher settings, forwarding toggles, push templates, notification sound, alert level, archive preference, language, and boot auto-start preference.
+- **Forwarding statistics**. Total forwarded SMS count, missed call count, failed delivery count, average delivery latency, and per-SIM delivery counts with SIM display name and carrier.
+- **Offline retry queue**. Rendered push title, body, SIM label, timestamp, and message ID for notifications that fail temporarily due to network or server errors.
+- **Internal runtime state**. Onboarding completion flag, the last processed call-log record ID watermark, and a locally generated secret used to compute deduplication message IDs.
 
-- Turn off SMS or missed call forwarding in Fion at any time.
-- Revoke any permission in Android Settings → Apps → Fion → Permissions.
-- Reset statistics in Fion Settings → Reset statistics.
-- Uninstall Fion, or clear its storage, to delete all data on the phone.
+## 5. Data Security
 
-## Children
+We apply technical safeguards in transit and on your device to protect sensitive user data.
 
-Fion is not directed at children under 13.
+- **Encryption in transit**. Fion enforces HTTPS when connecting to the configured Bark server.
+- **Optional end-to-end payload encryption**. When you configure an AES encryption key (AES-128, AES-192, or AES-256 in CBC, GCM, or ECB mode), Fion encrypts the notification payload (title, body, group, sound, alert level, and archive flag) on your device before transmission. The `device_key`, deduplication message `id`, and initialization vector `iv` (when used by CBC or GCM) remain unencrypted so Bark can route and decrypt the notification. Only a party holding your AES key, normally your Bark app, can decrypt the payload.
+- **On-device isolation**. All local data is stored exclusively inside Fion's Android private app storage, isolated by the operating system. Android cloud backup (`allowBackup="false"`) and device-to-device data transfer are disabled so settings, keys, statistics, and queued notifications do not leave your device through system backup or migration.
 
-## Changes
+## 6. Data Retention and Deletion
 
-Changes to this policy are published at this address with a new effective date.
+- **HYPAI ORG servers**. Zero retention, because HYPAI ORG receives no user data.
+- **Offline retry queue**. Queued notifications are deleted immediately upon successful delivery or permanent rejection by the Bark server. Undelivered items older than 24 hours are discarded automatically during retry.
+- **Settings, statistics, and runtime state**. Retained on your device until you change, reset, clear, or remove them.
+- **Third-party servers**. Retention and deletion of delivered pushes depend on your Bark server operator and Apple Inc.
 
-## Contact
+You can delete your local data at any time using the following steps.
 
-Open an issue at <https://github.com/HypaiORG/Fion/issues>.
+1. Reset forwarding statistics in Fion under `Settings › Reset statistics`.
+2. Delete all locally stored settings, keys, statistics, runtime state, and queued notifications by clearing Fion's app storage in Android settings or uninstalling Fion.
+
+## 7. Your Controls and Privacy Rights
+
+You retain direct control over data access and forwarding at all times.
+
+- Disable SMS forwarding or missed call forwarding inside Fion at any time.
+- Revoke any runtime permission in `Android Settings › Apps › Fion › Permissions`.
+- Replace the default server `api.day.app` with a self-hosted Bark server or enable AES encryption before forwarding sensitive messages.
+
+Depending on your jurisdiction, including the European Economic Area, the United Kingdom, and California, you may have rights to know, access, restrict, or delete personal data and to withdraw consent. Because HYPAI ORG stores no user data on its own servers, you can exercise deletion and withdrawal directly on your device using the controls above, or contact us with any privacy request.
+
+## 8. Children's Privacy
+
+Fion is not directed to children under 13 years of age, or the equivalent minimum age in your jurisdiction. HYPAI ORG does not knowingly collect personal data from children.
+
+## 9. Changes to This Privacy Policy
+
+HYPAI ORG may update this Privacy Policy when Fion's data practices or applicable legal requirements change. Any update will be published at the same web address with a revised effective date.
+
+## 10. Contact Us
+
+For privacy questions, compliance inquiries, or requests regarding this Privacy Policy, contact HYPAI ORG directly.
+
+- **Developer Entity**. HYPAI ORG
+- **Privacy Contact Email**. <support@hypai.org>
+
+For non-confidential technical bug reports only, you may also open an issue at <https://github.com/HypaiORG/Fion/issues>. Do not post personal or sensitive data in public issue trackers.
