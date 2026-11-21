@@ -6,6 +6,7 @@ import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedContentTransitionScope
 import androidx.compose.animation.ContentTransform
 import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
@@ -24,6 +25,7 @@ import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.requiredSize
@@ -75,7 +77,6 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.LayoutDirection
@@ -194,10 +195,17 @@ private fun StepPage(plan: List<Step>, index: Int, blocked: Boolean, onBlocked: 
                 }
             }
         }
-        Box(Modifier.padding(horizontal = 20.dp).fillMaxWidth().height(84.dp).glass(RoundedCornerShape(22.dp))) {
-            AnimatedContent(step, Modifier.fillMaxSize(), transitionSpec = { stepTransition() }, label = "stepNote") {
+        Box(
+            Modifier
+                .padding(horizontal = 20.dp)
+                .fillMaxWidth()
+                .heightIn(min = 84.dp)
+                .animateContentSize(tween(200, easing = Motion.Standard))
+                .glass(RoundedCornerShape(22.dp)),
+        ) {
+            AnimatedContent(step, Modifier.fillMaxWidth(), transitionSpec = { stepTransition() }, label = "stepNote") {
                 Row(
-                    Modifier.fillMaxSize().padding(horizontal = 18.dp),
+                    Modifier.fillMaxWidth().heightIn(min = 84.dp).padding(horizontal = 18.dp, vertical = 14.dp),
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(14.dp),
                 ) {
@@ -208,10 +216,8 @@ private fun StepPage(plan: List<Step>, index: Int, blocked: Boolean, onBlocked: 
                             style = Type.Field,
                             fontWeight = FontWeight.SemiBold,
                             color = Palette.Ink,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
                         )
-                        Text(stringResource(it.note), style = Type.Secondary, color = Palette.Muted, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        Text(stringResource(it.note), style = Type.Secondary, color = Palette.Muted)
                     }
                 }
             }

@@ -389,10 +389,8 @@ private fun NoticeBanner(notice: Notice, modifier: Modifier, onClick: () -> Unit
                 style = Type.RowTitle,
                 fontWeight = FontWeight.Medium,
                 color = Palette.Ink,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
             )
-            Text(stringResource(look.summary), style = Type.Secondary, color = Palette.Muted, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text(stringResource(look.summary), style = Type.Secondary, color = Palette.Muted)
         }
         Box(
             Modifier.height(34.dp).clip(CircleShape).background(Palette.Navy.copy(alpha = 0.12f)).padding(horizontal = 14.dp),

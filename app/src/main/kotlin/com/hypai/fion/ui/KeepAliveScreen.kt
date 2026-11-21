@@ -16,6 +16,7 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -191,6 +192,7 @@ private fun RequirementRow(item: Requirement) {
                 } else {
                     FilledTonalButton(
                         onClick = control.onFix,
+                        contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
                         colors = ButtonDefaults.filledTonalButtonColors(
                             containerColor = Palette.NavySurface,
                             contentColor = Palette.NavyDeep,

@@ -7,6 +7,7 @@ import androidx.annotation.StringRes
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -29,7 +30,6 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.hypai.fion.R
 import com.hypai.fion.core.EventKind
@@ -107,7 +107,7 @@ private fun PermissionLine(look: PermissionLook, granted: Boolean, onGrant: () -
         IconBadge(look.icon, look.background, look.tint)
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(1.dp)) {
             Text(stringResource(look.title), style = Type.Option, color = Palette.Ink)
-            Text(stringResource(look.summary), style = Type.Secondary, color = Palette.Muted, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text(stringResource(look.summary), style = Type.Secondary, color = Palette.Muted)
         }
         AnimatedContent(
             granted,
@@ -128,6 +128,7 @@ private fun PermissionLine(look: PermissionLook, granted: Boolean, onGrant: () -
                 FilledTonalButton(
                     onClick = onGrant,
                     Modifier.height(36.dp),
+                    contentPadding = PaddingValues(horizontal = 16.dp, vertical = 0.dp),
                     colors = ButtonDefaults.filledTonalButtonColors(
                         containerColor = Palette.Navy.copy(alpha = 0.12f),
                         contentColor = Palette.NavyDeep,
