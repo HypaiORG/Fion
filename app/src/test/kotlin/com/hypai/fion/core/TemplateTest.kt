@@ -40,8 +40,8 @@ class TemplateTest {
 
         val message = event.toMessage(TemplateChoice.Default, tokyo, Language.Zh, "k")
 
-        assertEquals("未接电话 · +819000000000", message.title)
-        assertEquals("2026-11-15 14:32呼叫 +817000000000, 今日第3次来电", message.body)
+        assertEquals("未接来电 · +819000000000", message.title)
+        assertEquals("2026-11-15 14:32 呼叫 +817000000000，今日第 3 次未接", message.body)
     }
 
     @Test

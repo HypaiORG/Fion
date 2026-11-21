@@ -47,9 +47,8 @@ fun EventKind.defaultTemplate(language: Language): Template {
         }
         EventKind.MissedCall -> when (language) {
             Language.Zh -> Template(
-                title = "未接电话 · ${v(TemplateVariable.From)}",
-                body = "${v(TemplateVariable.Time)}呼叫 ${v(TemplateVariable.Number)}, " +
-                    "今日第${v(TemplateVariable.CallCount)}次来电",
+                title = "未接来电 · ${v(TemplateVariable.From)}",
+                body = "${v(TemplateVariable.Time)} 呼叫 ${v(TemplateVariable.Number)}，今日第 ${v(TemplateVariable.CallCount)} 次未接",
             )
             Language.En -> Template(
                 title = "Missed call · ${v(TemplateVariable.From)}",
