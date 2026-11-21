@@ -50,6 +50,7 @@ sealed interface Screen : NavKey {
     @Serializable data object Settings : Screen
     @Serializable data object Bark : Screen
     @Serializable data object KeepAlive : Screen
+    @Serializable data object Privacy : Screen
     @Serializable data class Forward(val kind: EventKind) : Screen
 }
 
@@ -183,6 +184,13 @@ private fun AppRoot() {
                     readiness = readiness.value,
                     persistentNotification = settings.persistentNotification,
                     onPersistentNotificationChange = { on -> model.updateSettings { it.copy(persistentNotification = on) } },
+                    onBack = goBack,
+                )
+            }
+            entry<Screen.Privacy> {
+                PrivacyScreen(
+                    settings = settings,
+                    readiness = readiness.value,
                     onBack = goBack,
                 )
             }

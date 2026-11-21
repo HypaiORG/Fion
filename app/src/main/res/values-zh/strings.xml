@@ -54,8 +54,8 @@
     <string name="settings_reset_summary">清空本机计数，不可恢复</string>
     <string name="settings_reset_text">所有计数将被清空，且无法恢复。</string>
     <string name="settings_reset_confirm">重置</string>
-    <string name="settings_privacy">隐私政策</string>
-    <string name="settings_privacy_summary">Fion 读取哪些数据、发往何处</string>
+    <string name="settings_privacy">隐私保护</string>
+    <string name="settings_privacy_summary">图解所需权限与隐私保护方式</string>
     <string name="settings_version">版本</string>
     <string name="settings_wiki_summary">Bark 的安装与使用说明</string>
     <string name="settings_open_in_browser">在浏览器中打开</string>
@@ -178,4 +178,127 @@
     <string name="onb_step">第 %1$d 步，共 %2$d 步</string>
     <string name="onb_later">稍后再说</string>
     <string name="onb_open_settings">前往系统设置</string>
+
+    <string name="privacy_hero_title">一图看懂飞鸿如何护隐私</string>
+    <string name="privacy_hero_desc">只做你的私人信使：直发你的 Bark，无飞鸿服务器，不翻旧记录。</string>
+    <string name="privacy_flow_phone">你的手机</string>
+    <string name="privacy_flow_phone_sub">只读新消息</string>
+    <string name="privacy_flow_aes_on">HTTPS + AES</string>
+    <string name="privacy_flow_aes_on_sub">手机端已上锁</string>
+    <string name="privacy_flow_https_only">HTTPS 通道</string>
+    <string name="privacy_flow_https_only_sub">可再加 AES 锁</string>
+    <string name="privacy_flow_bark">你的 Bark</string>
+    <string name="privacy_flow_no_server">不经飞鸿服务器 · 开发者看不见</string>
+    <string name="privacy_flow_desc">数据路径：你的手机经加密通道直达你指定的 Bark 服务器，不经过飞鸿服务器。</string>
+    <string name="privacy_trust_no_server">无飞鸿服务器</string>
+    <string name="privacy_trust_no_history">不翻旧记录</string>
+    <string name="privacy_trust_no_backup">关闭云备份</string>
+
+    <string name="privacy_section_permissions">飞鸿需要哪些权限</string>
+    <string name="privacy_section_permissions_sub">绿框是只做的事，红框是绝不碰的线</string>
+    <string name="privacy_status_granted">已授权</string>
+    <string name="privacy_status_not_granted">未授权</string>
+    <string name="privacy_status_ready">已就绪</string>
+    <string name="privacy_status_partial">部分开启</string>
+    <string name="privacy_tag_purpose">用途</string>
+    <string name="privacy_tag_guard">守护</string>
+
+    <string name="privacy_perm_sms_title">接收新短信</string>
+    <string name="privacy_perm_sms_code">RECEIVE_SMS</string>
+    <string name="privacy_perm_sms_allow_title">只看刚到的新短信</string>
+    <string name="privacy_perm_sms_allow_sub">发件人与新正文</string>
+    <string name="privacy_perm_sms_block_title">旧收件箱看不见</string>
+    <string name="privacy_perm_sms_block_sub">未申请收件箱权限</string>
+    <string name="privacy_perm_sms_purpose">第一时间把验证码和新短信推到 Bark</string>
+    <string name="privacy_perm_sms_guard">不读历史收件箱，送达后不留正文</string>
+
+    <string name="privacy_perm_call_title">读取通话记录</string>
+    <string name="privacy_perm_call_code">READ_CALL_LOG</string>
+    <string name="privacy_perm_call_allow_title">只挑新未接来电</string>
+    <string name="privacy_perm_call_allow_sub">号码 · 时间 · 次数</string>
+    <string name="privacy_perm_call_block_title">已接与拨出全跳过</string>
+    <string name="privacy_perm_call_block_sub">不传历史 · 不录音</string>
+    <string name="privacy_perm_call_purpose">漏接电话时提醒来电号码和今日次数</string>
+    <string name="privacy_perm_call_guard">跳过已接与拨出，无录音权限（重授权可能补发）</string>
+
+    <string name="privacy_perm_sim_title">读取 SIM 卡信息</string>
+    <string name="privacy_perm_sim_code">READ_PHONE_STATE · READ_PHONE_NUMBERS</string>
+    <string name="privacy_perm_sim_allow_title">只标明哪张卡收到</string>
+    <string name="privacy_perm_sim_allow_sub">卡名 · 运营商 · 号码</string>
+    <string name="privacy_perm_sim_block_title">不拨号也不读通讯录</string>
+    <string name="privacy_perm_sim_block_sub">无拨号和发信权限</string>
+    <string name="privacy_perm_sim_purpose">双卡时标清楚消息来自哪张 SIM 卡</string>
+    <string name="privacy_perm_sim_guard">不会打电话发短信，也不读联系人</string>
+
+    <string name="privacy_perm_bg_title">通知、后台与联网</string>
+    <string name="privacy_perm_bg_code">NOTIFICATIONS · 电池不受限 · INTERNET</string>
+    <string name="privacy_perm_bg_allow_title">稳住后台直连 Bark</string>
+    <string name="privacy_perm_bg_allow_sub">保活 · 断网自动重试</string>
+    <string name="privacy_perm_bg_block_title">不连任何第三方</string>
+    <string name="privacy_perm_bg_block_sub">无广告 · 无统计上报</string>
+    <string name="privacy_perm_bg_purpose">防系统清理漏转，把推送发到你的 Bark</string>
+    <string name="privacy_perm_bg_guard">只连你填的服务器（含 HTTPS 重定向），通知可关</string>
+
+    <string name="privacy_server_title">Bark 服务器你来选</string>
+    <string name="privacy_server_badge_default">当前默认 · %1$s</string>
+    <string name="privacy_server_badge_custom">当前自建 · %1$s</string>
+    <string name="privacy_server_desc">不设飞鸿服务器，推送发给谁全由你决定。</string>
+    <string name="privacy_server_official_title">默认服务器</string>
+    <string name="privacy_server_official_sub">api.day.app</string>
+    <string name="privacy_server_official_note">Bark 官方，开箱即用</string>
+    <string name="privacy_server_cf_tag">完全掌控</string>
+    <string name="privacy_server_cf_title">Cloudflare 自建</string>
+    <string name="privacy_server_cf_sub">专属私有通道</string>
+    <string name="privacy_server_cf_note">可免费部署，全程自主</string>
+    <string name="privacy_server_chain_phone">你的手机</string>
+    <string name="privacy_server_chain_cf">Cloudflare 自建</string>
+    <string name="privacy_server_chain_device">你的设备</string>
+    <string name="privacy_server_chain_desc">自建链路：你的手机直连你的 Cloudflare 服务器再送达你的设备。</string>
+    <string name="privacy_server_tip">使用 Cloudflare 自建 Bark，再开启下方 AES 加密，从读取、传输到投递全部环节完全由你自己掌控。</string>
+
+    <string name="privacy_aes_title">离开手机前先上锁</string>
+    <string name="privacy_aes_badge_on">当前已加密 · %1$s</string>
+    <string name="privacy_aes_badge_off">当前未开 AES</string>
+    <string name="privacy_aes_desc">填上 AES 密钥后，正文在手机里锁成乱码，连中转服务器也看不懂。</string>
+    <string name="privacy_aes_mode_locked">AES 加密发出</string>
+    <string name="privacy_aes_mode_plain">未开 AES 发出</string>
+    <string name="privacy_aes_sample_label">手机收到的短信</string>
+    <string name="privacy_aes_sample_body">【银行】验证码 839201，5 分钟内有效</string>
+    <string name="privacy_aes_step_locked">本地用 AES 密钥 + 随机 IV 上锁</string>
+    <string name="privacy_aes_step_plain">仅 HTTPS 传输，未加密正文</string>
+    <string name="privacy_aes_out_locked_label">发出的密文包（服务器看不懂）</string>
+    <string name="privacy_aes_out_locked_code">device_key: \"aB3x…\" (指路)\nid: \"9f4c…\" (去重)\nciphertext: \"k8mQ7x2pL4vR9nB3cT6wY…\"</string>
+    <string name="privacy_aes_out_locked_hint">仅 Device Key 和 ID 用于指路，只有你的 Bark 能解开正文。</string>
+    <string name="privacy_aes_out_plain_label">发出的明文包（服务器可见正文）</string>
+    <string name="privacy_aes_out_plain_code">device_key: \"aB3x…\"\nbody: \"【银行】验证码 839201，5 分钟内有效\"</string>
+    <string name="privacy_aes_out_plain_hint">传输有 HTTPS 保护，建议填 AES 密钥或配合 Cloudflare 自建。</string>
+    <string name="privacy_aes_setting_hint">在「设置 › Bark 推送设置」中即可填写自建地址与 AES 密钥</string>
+
+    <string name="privacy_storage_title">手机里只留这 3 样</string>
+    <string name="privacy_storage_config_title">你的配置与密钥</string>
+    <string name="privacy_storage_config_desc">仅存飞鸿私有目录，外人无法读取</string>
+    <string name="privacy_storage_stats_title">转发统计数字</string>
+    <string name="privacy_storage_stats_desc">只记数量与耗时，不含正文，随时可清</string>
+    <string name="privacy_storage_queue_title">断网暂存队列</string>
+    <string name="privacy_storage_queue_desc">联网自动重发，超 24 小时自动销毁</string>
+    <string name="privacy_storage_no_backup">已关闭系统云备份与换机迁移</string>
+
+    <string name="privacy_never_title">飞鸿绝不做的 4 件事</string>
+    <string name="privacy_never_1_title">无飞鸿服务器</string>
+    <string name="privacy_never_1_desc">开发者收不到任何数据</string>
+    <string name="privacy_never_2_title">无广告与统计</string>
+    <string name="privacy_never_2_desc">不埋点、不追踪习惯</string>
+    <string name="privacy_never_3_title">无静默上报</string>
+    <string name="privacy_never_3_desc">无崩溃收集与更新探测</string>
+    <string name="privacy_never_4_title">不卖不外传</string>
+    <string name="privacy_never_4_desc">绝不传给第三方</string>
+
+    <string name="privacy_control_title">一切由你掌控</string>
+    <string name="privacy_control_1_title">随时关</string>
+    <string name="privacy_control_1_desc">首页一键暂停</string>
+    <string name="privacy_control_2_title">随时撤</string>
+    <string name="privacy_control_2_desc">系统随时撤权</string>
+    <string name="privacy_control_3_title">卸载清光</string>
+    <string name="privacy_control_3_desc">卸载清空本机</string>
+    <string name="privacy_footer">生效日期 2026-11-18 · 不面向 13 岁以下儿童</string>
 </resources>

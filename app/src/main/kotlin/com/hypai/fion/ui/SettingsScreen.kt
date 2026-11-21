@@ -42,13 +42,6 @@ import com.hypai.fion.platform.PermissionHealth
 import com.hypai.fion.platform.switchLanguage
 
 private const val BARK_WIKI = "https://bark.day.app/#/?id=bark"
-private const val PRIVACY_POLICY = "https://github.com/HypaiORG/Fion/blob/main/docs/privacy"
-
-private val Language.privacyPolicy: String
-    get() = when (this) {
-        Language.En -> "$PRIVACY_POLICY.md"
-        Language.Zh -> "$PRIVACY_POLICY.zh-CN.md"
-    }
 
 @Composable
 private fun Language.displayName(): String = stringResource(
@@ -168,8 +161,9 @@ fun SettingsScreen(
                 title = stringResource(R.string.settings_privacy),
                 subtitle = stringResource(R.string.settings_privacy_summary),
                 leading = { IconBadge(Icons.Shield) },
-                onClick = { open(language.privacyPolicy) },
-            ) { ExternalMark() }
+                trailing = { Chevron() },
+                onClick = { onOpen(Screen.Privacy) },
+            )
             ListRow(
                 title = stringResource(R.string.settings_version),
                 subtitle = "",

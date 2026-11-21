@@ -82,4 +82,9 @@ object Icons {
     val Globe = stroke("M12 22a10 10 0 1 0 0-20 10 10 0 0 0 0 20z", "M2 12h20M12 2a15.3 15.3 0 0 1 0 20M12 2a15.3 15.3 0 0 0 0 20")
     val Forward = stroke("M15 17l5-5-5-5", "M4 18v-2a4 4 0 0 1 4-4h12", width = 2.2f)
     val Sim = stroke("M15 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7z", "M9.5 11h5a1 1 0 0 1 1 1v4a1 1 0 0 1-1 1h-5a1 1 0 0 1-1-1v-4a1 1 0 0 1 1-1z", width = 1.8f)
+    val Close = stroke("M18 6 6 18", "M6 6l12 12", width = 2.4f)
+    val Ban = stroke("M12 22a10 10 0 1 0 0-20 10 10 0 0 0 0 20z", "M4.93 4.93l14.14 14.14")
+    val Smartphone = stroke("M7 2h10a2 2 0 0 1 2 2v16a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2z", "M12 18h.01")
+    val ArrowDown = stroke("M12 5v14", "m19 12-7 7-7-7", width = 2.2f)
+    val Cloud = stroke("M17.5 19H9a7 7 0 1 1 6.71-9h1.79a4.5 4.5 0 1 1 0 9z")
 }

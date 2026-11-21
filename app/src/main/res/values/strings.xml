@@ -58,8 +58,8 @@
     <string name="settings_reset_summary">Clears local counters, can\'t be undone</string>
     <string name="settings_reset_text">All counters will be permanently erased.</string>
     <string name="settings_reset_confirm">Reset</string>
-    <string name="settings_privacy">Privacy policy</string>
-    <string name="settings_privacy_summary">What Fion reads and where it goes</string>
+    <string name="settings_privacy">Privacy protection</string>
+    <string name="settings_privacy_summary">Permissions &amp; privacy guide</string>
     <string name="settings_version">Version</string>
     <string name="settings_wiki_summary">How to install and use Bark</string>
     <string name="settings_open_in_browser">Open in browser</string>
@@ -182,4 +182,127 @@
     <string name="onb_step">Step %1$d of %2$d</string>
     <string name="onb_later">Not now</string>
     <string name="onb_open_settings">Open system settings</string>
+
+    <string name="privacy_hero_title">Your privacy in one picture</string>
+    <string name="privacy_hero_desc">Direct to your Bark. No Fion server. No history.</string>
+    <string name="privacy_flow_phone">Your phone</string>
+    <string name="privacy_flow_phone_sub">New only</string>
+    <string name="privacy_flow_aes_on">HTTPS + AES</string>
+    <string name="privacy_flow_aes_on_sub">Locked locally</string>
+    <string name="privacy_flow_https_only">HTTPS</string>
+    <string name="privacy_flow_https_only_sub">AES optional</string>
+    <string name="privacy_flow_bark">Your Bark</string>
+    <string name="privacy_flow_no_server">No Fion server · Developer sees nothing</string>
+    <string name="privacy_flow_desc">Data path: from your phone through an encrypted connection straight to your chosen Bark server, never touching any Fion server.</string>
+    <string name="privacy_trust_no_server">No Fion server</string>
+    <string name="privacy_trust_no_history">No history</string>
+    <string name="privacy_trust_no_backup">No backup</string>
+
+    <string name="privacy_section_permissions">Permissions Fion asks for</string>
+    <string name="privacy_section_permissions_sub">Green is allowed. Red is never touched.</string>
+    <string name="privacy_status_granted">Granted</string>
+    <string name="privacy_status_not_granted">Not granted</string>
+    <string name="privacy_status_ready">Ready</string>
+    <string name="privacy_status_partial">Partial</string>
+    <string name="privacy_tag_purpose">Why</string>
+    <string name="privacy_tag_guard">Guard</string>
+
+    <string name="privacy_perm_sms_title">Receive new SMS</string>
+    <string name="privacy_perm_sms_code">RECEIVE_SMS</string>
+    <string name="privacy_perm_sms_allow_title">New SMS only</string>
+    <string name="privacy_perm_sms_allow_sub">Sender &amp; new text</string>
+    <string name="privacy_perm_sms_block_title">Inbox stays hidden</string>
+    <string name="privacy_perm_sms_block_sub">No READ_SMS access</string>
+    <string name="privacy_perm_sms_purpose">Sends new codes &amp; texts to Bark</string>
+    <string name="privacy_perm_sms_guard">Skips inbox; never saves sent text</string>
+
+    <string name="privacy_perm_call_title">Read call log</string>
+    <string name="privacy_perm_call_code">READ_CALL_LOG</string>
+    <string name="privacy_perm_call_allow_title">New missed calls</string>
+    <string name="privacy_perm_call_allow_sub">Number · Time · Count</string>
+    <string name="privacy_perm_call_block_title">Other calls skipped</string>
+    <string name="privacy_perm_call_block_sub">No history · No audio</string>
+    <string name="privacy_perm_call_purpose">Alerts missed caller &amp; daily count</string>
+    <string name="privacy_perm_call_guard">Skips other calls; no mic access</string>
+
+    <string name="privacy_perm_sim_title">Read SIM info</string>
+    <string name="privacy_perm_sim_code">READ_PHONE_STATE · READ_PHONE_NUMBERS</string>
+    <string name="privacy_perm_sim_allow_title">Labels which SIM</string>
+    <string name="privacy_perm_sim_allow_sub">Name · Carrier · Number</string>
+    <string name="privacy_perm_sim_block_title">Never calls or texts</string>
+    <string name="privacy_perm_sim_block_sub">No dialer or contacts</string>
+    <string name="privacy_perm_sim_purpose">Shows which SIM got the alert</string>
+    <string name="privacy_perm_sim_guard">Never calls, texts, or reads contacts</string>
+
+    <string name="privacy_perm_bg_title">Background &amp; network</string>
+    <string name="privacy_perm_bg_code">NOTIFICATIONS · BATTERY · INTERNET</string>
+    <string name="privacy_perm_bg_allow_title">Stays awake for Bark</string>
+    <string name="privacy_perm_bg_allow_sub">Status · Offline retry</string>
+    <string name="privacy_perm_bg_block_title">Zero third parties</string>
+    <string name="privacy_perm_bg_block_sub">No ads · No trackers</string>
+    <string name="privacy_perm_bg_purpose">Stays active &amp; sends to your Bark</string>
+    <string name="privacy_perm_bg_guard">Only your Bark; notice optional</string>
+
+    <string name="privacy_server_title">You choose the Bark server</string>
+    <string name="privacy_server_badge_default">Default · %1$s</string>
+    <string name="privacy_server_badge_custom">Self-hosted · %1$s</string>
+    <string name="privacy_server_desc">No Fion server. You choose where pushes go.</string>
+    <string name="privacy_server_official_title">Default Bark</string>
+    <string name="privacy_server_official_sub">api.day.app</string>
+    <string name="privacy_server_official_note">Official, ready to use</string>
+    <string name="privacy_server_cf_tag">Full control</string>
+    <string name="privacy_server_cf_title">Cloudflare</string>
+    <string name="privacy_server_cf_sub">Private self-host</string>
+    <string name="privacy_server_cf_note">Free; full ownership</string>
+    <string name="privacy_server_chain_phone">Your phone</string>
+    <string name="privacy_server_chain_cf">Your Cloudflare</string>
+    <string name="privacy_server_chain_device">Your device</string>
+    <string name="privacy_server_chain_desc">Self-hosted path: from your phone directly through your Cloudflare server to your device.</string>
+    <string name="privacy_server_tip">Self-host on Cloudflare and add AES below to control every step yourself.</string>
+
+    <string name="privacy_aes_title">Lock secrets before leaving</string>
+    <string name="privacy_aes_badge_on">Encrypted · %1$s</string>
+    <string name="privacy_aes_badge_off">AES lock off</string>
+    <string name="privacy_aes_desc">AES scrambles your text locally so no server can read it.</string>
+    <string name="privacy_aes_mode_locked">With AES lock</string>
+    <string name="privacy_aes_mode_plain">Without AES</string>
+    <string name="privacy_aes_sample_label">SMS on your phone</string>
+    <string name="privacy_aes_sample_body">[Bank] Code 839201, valid for 5 min</string>
+    <string name="privacy_aes_step_locked">AES key + random IV on phone</string>
+    <string name="privacy_aes_step_plain">HTTPS only, no AES content lock</string>
+    <string name="privacy_aes_out_locked_label">Scrambled packet (unreadable)</string>
+    <string name="privacy_aes_out_locked_code">device_key: \"aB3x…\" (routing)\nid: \"9f4c…\" (dedup)\nciphertext: \"k8mQ7x2pL4vR9nB3cT6wY…\"</string>
+    <string name="privacy_aes_out_locked_hint">Only Device Key &amp; ID route it; only your Bark can unlock it.</string>
+    <string name="privacy_aes_out_plain_label">Plain packet (readable by server)</string>
+    <string name="privacy_aes_out_plain_code">device_key: \"aB3x…\"\nbody: \"[Bank] Code 839201, valid for 5 min\"</string>
+    <string name="privacy_aes_out_plain_hint">HTTPS protects transit. Add AES or Cloudflare for full privacy.</string>
+    <string name="privacy_aes_setting_hint">Configure server &amp; AES in Settings › Bark push settings</string>
+
+    <string name="privacy_storage_title">Only 3 things stay on phone</string>
+    <string name="privacy_storage_config_title">Your settings &amp; keys</string>
+    <string name="privacy_storage_config_desc">Stored in Fion\'s private space only</string>
+    <string name="privacy_storage_stats_title">Forwarding counters</string>
+    <string name="privacy_storage_stats_desc">Counts &amp; latency only; reset anytime</string>
+    <string name="privacy_storage_queue_title">Offline retry queue</string>
+    <string name="privacy_storage_queue_desc">Retries online; drops after 24h</string>
+    <string name="privacy_storage_no_backup">Android cloud backup &amp; transfer disabled</string>
+
+    <string name="privacy_never_title">4 things Fion never does</string>
+    <string name="privacy_never_1_title">No Fion server</string>
+    <string name="privacy_never_1_desc">Zero data sent to us</string>
+    <string name="privacy_never_2_title">No ads or trackers</string>
+    <string name="privacy_never_2_desc">Zero ads or analytics</string>
+    <string name="privacy_never_3_title">No silent pings</string>
+    <string name="privacy_never_3_desc">No hidden requests</string>
+    <string name="privacy_never_4_title">Never shared</string>
+    <string name="privacy_never_4_desc">Never sent elsewhere</string>
+
+    <string name="privacy_control_title">You stay in control</string>
+    <string name="privacy_control_1_title">Pause</string>
+    <string name="privacy_control_1_desc">One tap off</string>
+    <string name="privacy_control_2_title">Revoke</string>
+    <string name="privacy_control_2_desc">In settings</string>
+    <string name="privacy_control_3_title">Uninstall</string>
+    <string name="privacy_control_3_desc">Wipes all data</string>
+    <string name="privacy_footer">Effective Nov 18, 2026 · Not for children under 13</string>
 </resources>
