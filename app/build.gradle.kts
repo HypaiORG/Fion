@@ -12,8 +12,8 @@ android {
         applicationId = "com.hypai.fion"
         minSdk = 35
         targetSdk = 36
-        versionCode = 4
-        versionName = "1.0.3"
+        versionCode = 5
+        versionName = "1.0.4"
     }
 
     val releaseKeystore = providers.environmentVariable("FION_KEYSTORE_FILE").orNull
