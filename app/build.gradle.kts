@@ -28,7 +28,14 @@ android {
         }
     }
 
+    androidResources {
+        localeFilters += listOf("en", "zh", "b+zh+Hant")
+    }
 
+    dependenciesInfo {
+        includeInApk = false
+        includeInBundle = false
+    }
 
     buildTypes {
         release {
@@ -36,6 +43,9 @@ android {
             isMinifyEnabled = true
             isShrinkResources = true
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"))
+            vcsInfo {
+                include = false
+            }
         }
     }
 
@@ -50,11 +60,18 @@ android {
     }
 
     packaging {
+        jniLibs {
+            excludes += setOf(
+                "**/libandroidx.graphics.path.so",
+                "**/libdatastore_shared_counter.so",
+            )
+        }
         resources {
             excludes += setOf(
                 "DebugProbesKt.bin",
                 "META-INF/*.version",
-                "kotlin/**/*.kotlin_builtins",
+                "META-INF/androidx/**",
+                "kotlin/**",
             )
         }
     }
