@@ -17,7 +17,7 @@ import org.junit.Test
 class TemplateEditorTest {
     @Test
     fun `chip placements localize labels and map raw offsets accurately`() {
-        val raw = "SMS · {发件人}/{time}"
+        val raw = "SMS · {sender}/{time}"
         val placements = computeChipPlacements(raw, Language.En, EventKind.Sms)
 
         assertEquals(2, placements.size)
@@ -28,8 +28,8 @@ class TemplateEditorTest {
 
         assertEquals(0, rawOffsetToVisual(0, placements))
         assertEquals(6, rawOffsetToVisual(6, placements))
-        assertEquals(placements[0].visualEnd, rawOffsetToVisual(11, placements))
-        assertEquals(placements[0].visualEnd + 1, rawOffsetToVisual(12, placements))
+        assertEquals(placements[0].visualEnd, rawOffsetToVisual(14, placements))
+        assertEquals(placements[0].visualEnd + 1, rawOffsetToVisual(15, placements))
         assertEquals(placements[1].visualEnd, rawOffsetToVisual(raw.length, placements))
     }
 
@@ -37,50 +37,50 @@ class TemplateEditorTest {
     fun `diffSingleChange distinguishes cursor-biased repeated characters`() {
         assertNull(diffSingleChange("abc", "abc", 1, 1))
         assertEquals(
-            BufferChange(4, 5, 4, 4),
-            diffSingleChange("{发件人}}", "{发件人}", oldSelectionMin = 5, newSelectionMin = 4),
+            BufferChange(7, 8, 7, 7),
+            diffSingleChange("{sender}}", "{sender}", oldSelectionMin = 8, newSelectionMin = 7),
         )
         assertEquals(
-            BufferChange(5, 6, 5, 5),
-            diffSingleChange("{发件人}}", "{发件人}", oldSelectionMin = 6, newSelectionMin = 5),
+            BufferChange(8, 9, 8, 8),
+            diffSingleChange("{sender}}", "{sender}", oldSelectionMin = 9, newSelectionMin = 8),
         )
         assertEquals(
-            BufferChange(2, 8, 2, 3),
-            diffSingleChange("{发件人}-{时间}", "{发X间}", oldSelectionMin = 2, newSelectionMin = 3),
+            BufferChange(2, 12, 2, 3),
+            diffSingleChange("{sender}-{time}", "{sXme}", oldSelectionMin = 2, newSelectionMin = 3),
         )
     }
 
     @Test
     fun `backspace and forward delete remove entire token atomically`() {
-        val original = "短信 · {发件人}"
+        val original = "短信 · {sender}"
         val tokens = findTemplateTokens(original)
 
-        val backspaceChange = diffSingleChange(original, "短信 · {发件人", 10, 9)!!
-        assertEquals("短信 · ", applyFixes("短信 · {发件人", computeAtomicEditFixes(tokens, backspaceChange)))
+        val backspaceChange = diffSingleChange(original, "短信 · {sender", 13, 12)!!
+        assertEquals("短信 · ", applyFixes("短信 · {sender", computeAtomicEditFixes(tokens, backspaceChange)))
 
-        val forwardChange = diffSingleChange(original, "短信 · 发件人}", 5, 5)!!
-        assertEquals("短信 · ", applyFixes("短信 · 发件人}", computeAtomicEditFixes(tokens, forwardChange)))
+        val forwardChange = diffSingleChange(original, "短信 · sender}", 5, 5)!!
+        assertEquals("短信 · ", applyFixes("短信 · sender}", computeAtomicEditFixes(tokens, forwardChange)))
     }
 
     @Test
     fun `partial selection across two chips cleans both touched tokens`() {
-        val original = "{发件人}-{时间}"
+        val original = "{sender}-{time}"
         val tokens = findTemplateTokens(original)
-        val change = diffSingleChange(original, "{发X间}", 2, 3)!!
+        val change = diffSingleChange(original, "{sXme}", 2, 3)!!
 
-        assertEquals("X", applyFixes("{发X间}", computeAtomicEditFixes(tokens, change)))
+        assertEquals("X", applyFixes("{sXme}", computeAtomicEditFixes(tokens, change)))
     }
 
     @Test
     fun `typing adjacent to a chip leaves token intact and interior insert relocates outside`() {
-        val original = "ab{发件人}cd"
+        val original = "ab{sender}cd"
         val tokens = findTemplateTokens(original)
 
-        assertTrue(computeAtomicEditFixes(tokens, diffSingleChange(original, "abX{发件人}cd", 2, 3)!!).isEmpty())
-        assertTrue(computeAtomicEditFixes(tokens, diffSingleChange(original, "ab{发件人}Xcd", 7, 8)!!).isEmpty())
+        assertTrue(computeAtomicEditFixes(tokens, diffSingleChange(original, "abX{sender}cd", 2, 3)!!).isEmpty())
+        assertTrue(computeAtomicEditFixes(tokens, diffSingleChange(original, "ab{sender}Xcd", 10, 11)!!).isEmpty())
 
-        val interiorChange = diffSingleChange(original, "ab{发X件人}cd", 4, 5)!!
-        assertEquals("ab{发件人}Xcd", applyFixes("ab{发X件人}cd", computeAtomicEditFixes(tokens, interiorChange)))
+        val interiorChange = diffSingleChange(original, "ab{sXender}cd", 4, 5)!!
+        assertEquals("ab{sender}Xcd", applyFixes("ab{sXender}cd", computeAtomicEditFixes(tokens, interiorChange)))
     }
 
     @Test
@@ -90,20 +90,20 @@ class TemplateEditorTest {
         assertEquals(VariablePickerTarget.Insert(3, 4), trigger)
         assertNull(detectNewSlashTrigger("短信", "短信/a", 4, 4))
 
-        val filteredTarget = resolveSlashTarget(trigger!!, "短信 /sim", 7, 7, false, vars, Language.Zh, EventKind.Sms)
+        val filteredTarget = resolveSlashTarget(trigger!!, "短信 /sim", 7, 7, false, vars, EventKind.Sms)
         assertEquals(VariablePickerTarget.Insert(3, 7), filteredTarget)
         assertEquals(
             listOf(TemplateVariable.SimName, TemplateVariable.Number),
-            pickerItemsForTarget(filteredTarget!!, "短信 /sim", vars, Language.Zh, EventKind.Sms),
+            pickerItemsForTarget(filteredTarget!!, "短信 /sim", vars, EventKind.Sms),
         )
 
-        val duringComposition = resolveSlashTarget(trigger, "短信 /shijian", 11, 11, true, vars, Language.Zh, EventKind.Sms)
+        val duringComposition = resolveSlashTarget(trigger, "短信 /shijian", 11, 11, true, vars, EventKind.Sms)
         assertEquals(VariablePickerTarget.Insert(3, 11), duringComposition)
-        assertEquals(vars, pickerItemsForTarget(duringComposition!!, "短信 /shijian", vars, Language.Zh, EventKind.Sms))
+        assertEquals(vars, pickerItemsForTarget(duringComposition!!, "短信 /shijian", vars, EventKind.Sms))
 
-        assertNull(resolveSlashTarget(trigger, "短信 /zzz", 7, 7, false, vars, Language.Zh, EventKind.Sms))
-        assertNull(resolveSlashTarget(trigger, "短信 / ", 5, 5, false, vars, Language.Zh, EventKind.Sms))
-        assertNull(resolveSlashTarget(trigger, "短信 ", 3, 3, false, vars, Language.Zh, EventKind.Sms))
+        assertNull(resolveSlashTarget(trigger, "短信 /zzz", 7, 7, false, vars, EventKind.Sms))
+        assertNull(resolveSlashTarget(trigger, "短信 / ", 5, 5, false, vars, EventKind.Sms))
+        assertNull(resolveSlashTarget(trigger, "短信 ", 3, 3, false, vars, EventKind.Sms))
     }
 
     @Test

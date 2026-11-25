@@ -16,8 +16,8 @@ class TemplateTest {
         val values = mapOf(TemplateVariable.From to "1", TemplateVariable.Content to "")
 
         assertEquals(
-            "a 1 {联系人} 1 {from} [] {}",
-            renderTemplate("a {发件人} {联系人} { 发件人 } {from} [{正文}] {}", values),
+            "a 1 {contact} 1 {from} [] {}",
+            renderTemplate("a {sender} {contact} { sender } {from} [{message}] {}", values),
         )
     }
 
@@ -48,13 +48,13 @@ class TemplateTest {
 
     @Test
     fun `each kind renders its own template and blanks variables of the other kind`() {
-        val smsTemplate = TemplateChoice.Custom(Template("S {未定义}", "{正文}|{来电次数}"))
-        val callTemplate = TemplateChoice.Custom(Template("C", "{正文}|{来电次数}"))
+        val smsTemplate = TemplateChoice.Custom(Template("S {unknown}", "{message}|{callCount}"))
+        val callTemplate = TemplateChoice.Custom(Template("C", "{message}|{callCount}"))
 
         val sms = ForwardEvent.Sms("1", SimIdentity(SimKey.subscription(1), 0, "", "", ""), at, at, "hi").toMessage(smsTemplate, tokyo, Language.Zh, "k")
         val call = ForwardEvent.MissedCall("1", SimIdentity(SimKey.subscription(1), 0, "", "", ""), at, at, 2).toMessage(callTemplate, tokyo, Language.Zh, "k")
 
-        assertEquals("S {未定义}", sms.title)
+        assertEquals("S {unknown}", sms.title)
         assertEquals("C", call.title)
         assertEquals("hi|", sms.body)
         assertEquals("|2", call.body)
@@ -64,10 +64,10 @@ class TemplateTest {
     fun `scanner preserves malformed and nested braces while substituting innermost valid tokens`() {
         val values = mapOf(TemplateVariable.From to "1")
 
-        assertEquals("{a 1}", renderTemplate("{a {发件人}}", values))
-        assertEquals("{1}", renderTemplate("{{发件人}}", values))
+        assertEquals("{a 1}", renderTemplate("{a {sender}}", values))
+        assertEquals("{1}", renderTemplate("{{sender}}", values))
         assertEquals("{unclosed", renderTemplate("{unclosed", values))
-        assertEquals("1}end", renderTemplate("{发件人}}end", values))
+        assertEquals("1}end", renderTemplate("{sender}}end", values))
     }
 
     @Test
@@ -113,11 +113,11 @@ class TemplateTest {
     }
 
     @Test
-    fun `variables resolve by either language name`() {
+    fun `variables resolve strictly by canonical id`() {
         val values = mapOf(TemplateVariable.From to "1", TemplateVariable.Number to "2")
 
-        assertEquals("1 1 2 2", renderTemplate("{sender} {发件人} { simNumber } {本机号码}", values))
-        assertEquals("{Sender}", renderTemplate("{Sender}", values))
+        assertEquals("1 2", renderTemplate("{sender} { simNumber }", values))
+        assertEquals("{Sender} {发件人}", renderTemplate("{Sender} {发件人}", values))
     }
 
     @Test
@@ -132,12 +132,12 @@ class TemplateTest {
 
     @Test
     fun `findTemplateTokens matches renderer boundaries and kind variables exclude inapplicable ones`() {
-        val tokens = findTemplateTokens("a {发件人} {未知} {{time}}")
+        val tokens = findTemplateTokens("a {sender} {unknown} {{time}}")
 
         assertEquals(
             listOf(
-                TemplateToken(2, 7, TemplateVariable.From),
-                TemplateToken(14, 20, TemplateVariable.Time),
+                TemplateToken(2, 10, TemplateVariable.From),
+                TemplateToken(22, 28, TemplateVariable.Time),
             ),
             tokens,
         )

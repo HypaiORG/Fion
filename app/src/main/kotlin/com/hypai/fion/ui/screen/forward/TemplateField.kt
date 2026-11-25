@@ -205,7 +205,6 @@ internal fun TemplateField(
 
     val latestOnValueChange by rememberUpdatedState(onValueChange)
     val latestVariables by rememberUpdatedState(variables)
-    val latestLanguage by rememberUpdatedState(language)
     val latestKind by rememberUpdatedState(kind)
     val latestFocused by rememberUpdatedState(focused)
 
@@ -257,7 +256,6 @@ internal fun TemplateField(
                     selectionEnd = selection.end,
                     hasComposition = hasComposition,
                     variables = latestVariables,
-                    language = latestLanguage,
                     kind = latestKind,
                 )
                 textChanged -> detectNewSlashTrigger(prevText, currentText, selection.start, selection.end)?.also {
@@ -335,8 +333,8 @@ internal fun TemplateField(
         val currentTarget = pickerTarget
         val currentLayout = textLayoutResult
         if (currentTarget != null && currentLayout != null) {
-            val items = remember(currentTarget, lastObservedText, variables, language, kind) {
-                pickerItemsForTarget(currentTarget, lastObservedText, variables, language, kind)
+            val items = remember(currentTarget, lastObservedText, variables, kind) {
+                pickerItemsForTarget(currentTarget, lastObservedText, variables, kind)
             }
             val anchor = remember(
                 currentTarget,
@@ -365,7 +363,7 @@ internal fun TemplateField(
                     kind = kind,
                     anchor = anchor,
                     onSelect = { variable ->
-                        val replacement = variable.token(language)
+                        val replacement = variable.token
                         val (rawStart, rawEnd) = when (currentTarget) {
                             is VariablePickerTarget.Insert -> currentTarget.slashStart to currentTarget.replaceEnd
                             is VariablePickerTarget.Replace -> currentTarget.token.start to currentTarget.token.end

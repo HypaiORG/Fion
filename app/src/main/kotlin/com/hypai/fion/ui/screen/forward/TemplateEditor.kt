@@ -166,17 +166,15 @@ fun detectNewSlashTrigger(
 fun filterVariables(
     variables: List<TemplateVariable>,
     query: String,
-    language: Language,
     kind: EventKind? = null,
 ): List<TemplateVariable> {
     if (query.isEmpty()) return variables
     val needle = query.trim().lowercase()
     if (needle.isEmpty()) return variables
     return variables.filter { variable ->
-        variable.displayName(language, kind).lowercase().contains(needle) ||
+        variable.id.lowercase().contains(needle) ||
             Language.entries.any { lang ->
-                variable.displayName(lang, kind).lowercase().contains(needle) ||
-                    variable.label(lang).lowercase().contains(needle)
+                variable.displayName(lang, kind).lowercase().contains(needle)
             }
     }
 }
@@ -188,7 +186,6 @@ fun resolveSlashTarget(
     selectionEnd: Int,
     hasComposition: Boolean,
     variables: List<TemplateVariable>,
-    language: Language,
     kind: EventKind? = null,
 ): VariablePickerTarget.Insert? {
     if (selectionStart != selectionEnd) return null
@@ -197,7 +194,7 @@ fun resolveSlashTarget(
     if (selectionStart <= current.slashStart || selectionStart > text.length) return null
     val query = text.substring(current.slashStart + 1, selectionStart)
     if (query.any { it.isWhitespace() || it == '{' || it == '}' || isSlashTriggerChar(it) }) return null
-    val matches = filterVariables(variables, query, language, kind)
+    val matches = filterVariables(variables, query, kind)
     if (matches.isEmpty() && !hasComposition) return null
     return current.copy(replaceEnd = selectionStart)
 }
@@ -206,14 +203,13 @@ fun pickerItemsForTarget(
     target: VariablePickerTarget,
     text: String,
     variables: List<TemplateVariable>,
-    language: Language,
     kind: EventKind? = null,
 ): List<TemplateVariable> = when (target) {
     is VariablePickerTarget.Replace -> variables
     is VariablePickerTarget.Insert -> {
         val start = (target.slashStart + 1).coerceIn(0, text.length)
         val end = target.replaceEnd.coerceIn(start, text.length)
-        filterVariables(variables, text.substring(start, end), language, kind).ifEmpty { variables }
+        filterVariables(variables, text.substring(start, end), kind).ifEmpty { variables }
     }
 }
 

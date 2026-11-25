@@ -13,14 +13,12 @@ enum class Language(val tag: String) { Zh("zh-Hans"), En("en") }
 data class Template(val title: String, val body: String)
 
 enum class TemplateVariable(
-    private val zh: String,
-    private val en: String,
+    val id: String,
     private val extract: (event: ForwardEvent, zone: ZoneId, language: Language) -> String,
 ) {
-    From("发件人", "sender", { event, _, language -> event.from.ifBlank { unknownNumber(language) } }),
-    Content("正文", "message", { event, _, _ -> event.messageBody }),
+    From("sender", { event, _, language -> event.from.ifBlank { unknownNumber(language) } }),
+    Content("message", { event, _, _ -> event.messageBody }),
     CallCount(
-        "来电次数",
         "callCount",
         { event, _, _ ->
             when (event) {
@@ -29,16 +27,13 @@ enum class TemplateVariable(
             }
         },
     ),
-    Time("时间", "time", { event, zone, _ -> TIME_FORMAT.format(Instant.ofEpochMilli(event.occurredAtMs).atZone(zone)) }),
-    Carrier("运营商", "carrier", { event, _, _ -> event.sim.carrier }),
-    SimName("SIM卡", "simName", { event, _, _ -> event.sim.name }),
-    Number("本机号码", "simNumber", { event, _, _ -> event.sim.number }),
+    Time("time", { event, zone, _ -> TIME_FORMAT.format(Instant.ofEpochMilli(event.occurredAtMs).atZone(zone)) }),
+    Carrier("carrier", { event, _, _ -> event.sim.carrier }),
+    SimName("simName", { event, _, _ -> event.sim.name }),
+    Number("simNumber", { event, _, _ -> event.sim.number }),
     ;
 
-    fun label(language: Language): String = when (language) {
-        Language.Zh -> zh
-        Language.En -> en
-    }
+    val token: String get() = "{$id}"
 
     fun displayName(language: Language, kind: EventKind? = null): String = when (this) {
         From -> when (language) {
@@ -71,8 +66,6 @@ enum class TemplateVariable(
         }
     }
 
-    fun token(language: Language): String = "{${label(language)}}"
-
     fun appliesTo(kind: EventKind): Boolean = when (this) {
         Content -> kind == EventKind.Sms
         CallCount -> kind == EventKind.MissedCall
@@ -91,34 +84,31 @@ data class TemplateToken(
     val variable: TemplateVariable,
 )
 
-fun EventKind.defaultTemplate(language: Language): Template {
-    val v = { variable: TemplateVariable -> variable.token(language) }
-    return when (this) {
-        EventKind.Sms -> when (language) {
-            Language.Zh -> Template(
-                title = "短信 · ${v(TemplateVariable.From)}",
-                body = "${v(TemplateVariable.Content)}\n────────\n" +
-                    "到达时间：${v(TemplateVariable.Time)}\n" +
-                    "接收号码：${v(TemplateVariable.SimName)} · ${v(TemplateVariable.Number)}",
-            )
-            Language.En -> Template(
-                title = "SMS · ${v(TemplateVariable.From)}",
-                body = "${v(TemplateVariable.Content)}\n────────\n" +
-                    "Received: ${v(TemplateVariable.Time)}\n" +
-                    "To: ${v(TemplateVariable.SimName)} · ${v(TemplateVariable.Number)}",
-            )
-        }
-        EventKind.MissedCall -> when (language) {
-            Language.Zh -> Template(
-                title = "未接来电 · ${v(TemplateVariable.From)}",
-                body = "${v(TemplateVariable.Time)} 呼叫 ${v(TemplateVariable.Number)}，今日第 ${v(TemplateVariable.CallCount)} 次未接",
-            )
-            Language.En -> Template(
-                title = "Missed call · ${v(TemplateVariable.From)}",
-                body = "Called ${v(TemplateVariable.Number)} at ${v(TemplateVariable.Time)}, " +
-                    "call #${v(TemplateVariable.CallCount)} today",
-            )
-        }
+fun EventKind.defaultTemplate(language: Language): Template = when (this) {
+    EventKind.Sms -> when (language) {
+        Language.Zh -> Template(
+            title = "短信 · ${TemplateVariable.From.token}",
+            body = "${TemplateVariable.Content.token}\n────────\n" +
+                "到达时间：${TemplateVariable.Time.token}\n" +
+                "接收号码：${TemplateVariable.SimName.token} · ${TemplateVariable.Number.token}",
+        )
+        Language.En -> Template(
+            title = "SMS · ${TemplateVariable.From.token}",
+            body = "${TemplateVariable.Content.token}\n────────\n" +
+                "Received: ${TemplateVariable.Time.token}\n" +
+                "To: ${TemplateVariable.SimName.token} · ${TemplateVariable.Number.token}",
+        )
+    }
+    EventKind.MissedCall -> when (language) {
+        Language.Zh -> Template(
+            title = "未接来电 · ${TemplateVariable.From.token}",
+            body = "${TemplateVariable.Time.token} 呼叫 ${TemplateVariable.Number.token}，今日第 ${TemplateVariable.CallCount.token} 次未接",
+        )
+        Language.En -> Template(
+            title = "Missed call · ${TemplateVariable.From.token}",
+            body = "Called ${TemplateVariable.Number.token} at ${TemplateVariable.Time.token}, " +
+                "call #${TemplateVariable.CallCount.token} today",
+        )
     }
 }
 
@@ -130,9 +120,7 @@ fun TemplateChoice.resolve(kind: EventKind, language: Language): Template = when
     is TemplateChoice.Custom -> template
 }
 
-private val VARIABLES_BY_LABEL = TemplateVariable.entries
-    .flatMap { variable -> Language.entries.map { variable.label(it) to variable } }
-    .toMap()
+private val VARIABLES_BY_ID = TemplateVariable.entries.associateBy(TemplateVariable::id)
 
 private val TIME_FORMAT = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm")
 
@@ -147,7 +135,7 @@ fun findTemplateTokens(template: String): List<TemplateToken> {
         var scan = open + 1
         while (scan < len && template[scan] != '{' && template[scan] != '}') scan++
         if (scan < len && template[scan] == '}') {
-            val variable = VARIABLES_BY_LABEL[template.substring(open + 1, scan).trim()]
+            val variable = VARIABLES_BY_ID[template.substring(open + 1, scan).trim()]
             if (variable != null) tokens.add(TemplateToken(open, scan + 1, variable))
             cursor = scan + 1
         } else {
