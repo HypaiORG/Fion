@@ -40,10 +40,10 @@ import com.hypai.fion.ui.design.AppBackground
 import com.hypai.fion.ui.design.AppTheme
 import com.hypai.fion.ui.design.Motion
 import com.hypai.fion.ui.screen.BarkScreen
-import com.hypai.fion.ui.screen.ForwardScreen
 import com.hypai.fion.ui.screen.HomeScreen
 import com.hypai.fion.ui.screen.KeepAliveScreen
 import com.hypai.fion.ui.screen.SettingsScreen
+import com.hypai.fion.ui.screen.forward.ForwardScreen
 import com.hypai.fion.ui.screen.onboarding.OnboardingScreen
 import com.hypai.fion.ui.screen.privacy.PrivacyScreen
 import kotlinx.coroutines.flow.SharingStarted

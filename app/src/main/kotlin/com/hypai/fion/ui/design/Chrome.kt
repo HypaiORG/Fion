@@ -51,13 +51,11 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.layout.layout
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalWindowInfo
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.hypai.fion.R
@@ -277,22 +275,15 @@ fun FormCard(
     iconBackground: Color,
     iconTint: Color,
     title: String,
-    action: @Composable () -> Unit = {},
     content: @Composable ColumnScope.() -> Unit,
 ) {
     GlassCard(padding = PaddingValues(horizontal = 16.dp, vertical = 20.dp), spacing = 22.dp) {
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             IconBadge(icon, iconBackground, iconTint, size = 32.dp, iconSize = 16.dp)
             Text(title, Modifier.weight(1f), style = Type.CardTitle, color = Palette.Ink)
-            Box(Modifier.overhangVertically()) { action() }
         }
         content()
     }
-}
-
-private fun Modifier.overhangVertically(): Modifier = layout { measurable, constraints ->
-    val placeable = measurable.measure(constraints.copy(minHeight = 0, maxHeight = Constraints.Infinity))
-    layout(placeable.width, 0) { placeable.place(0, -placeable.height / 2) }
 }
 
 @Composable

@@ -97,9 +97,10 @@
     <string name="forward_call_on">Auto-forwards missed calls</string>
     <string name="forward_off">Off, nothing will be pushed</string>
     <string name="forward_template">Push template</string>
-    <string name="forward_show_variables">Show available variables</string>
     <string name="forward_template_title">Title</string>
     <string name="forward_template_body">Body</string>
+    <string name="forward_template_hint">Type / for variables, tap to replace</string>
+    <string name="forward_variable_picker">Choose variable</string>
     <string name="forward_params">Push settings</string>
     <string name="forward_group">Notification group</string>
     <string name="forward_group_hint">Groups alerts in Bark, leave blank for none</string>
@@ -118,15 +119,6 @@
     <string name="forward_archive_summary">Keep forwarded alerts in Bark\'s history</string>
     <string name="sound_sheet_subtitle">Choose the sound Bark plays on arrival</string>
     <string name="sound_default">Default</string>
-    <string name="variables_title">Available variables</string>
-    <string name="variables_subtitle">Use in title or body to insert live info</string>
-    <string name="var_from">Phone number of the sender or caller</string>
-    <string name="var_content">Full text of the incoming SMS</string>
-    <string name="var_call_count">Missed calls from this number today</string>
-    <string name="var_time">When it arrived, e.g. 2026-11-16 10:42</string>
-    <string name="var_carrier">Carrier of the receiving SIM, e.g. docomo</string>
-    <string name="var_sim_name">Custom name of the receiving SIM</string>
-    <string name="var_number">Phone number of the receiving SIM</string>
 
     <string name="perm_sheet_title">Allow access to start</string>
     <string name="perm_sheet_sms_title">Allow SMS to forward</string>

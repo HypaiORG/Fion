@@ -93,9 +93,10 @@
     <string name="forward_call_on">有未接来电时自动推送到 Bark</string>
     <string name="forward_off">已关闭，不会推送此类消息</string>
     <string name="forward_template">推送模板</string>
-    <string name="forward_show_variables">查看可用变量</string>
     <string name="forward_template_title">推送标题</string>
     <string name="forward_template_body">推送正文</string>
+    <string name="forward_template_hint">输入 / 唤起变量选择，点击变量可替换</string>
+    <string name="forward_variable_picker">选择变量</string>
     <string name="forward_params">推送设置</string>
     <string name="forward_group">通知分组</string>
     <string name="forward_group_hint">Bark 会按此名称归类通知，留空则不分组</string>
@@ -114,15 +115,6 @@
     <string name="forward_archive_summary">在 Bark 中保留推送记录，方便查看</string>
     <string name="sound_sheet_subtitle">选择 Bark 收到推送时播放的提示音</string>
     <string name="sound_default">默认</string>
-    <string name="variables_title">可用变量</string>
-    <string name="variables_subtitle">在标题或正文中插入变量，推送时自动替换</string>
-    <string name="var_from">发来短信或呼入电话的对方号码</string>
-    <string name="var_content">收到的短信正文内容</string>
-    <string name="var_call_count">该号码今天累计的未接来电次数</string>
-    <string name="var_time">收到短信或来电的时间，如 2026-11-16 10:42</string>
-    <string name="var_carrier">接收 SIM 卡的运营商名称，如 docomo</string>
-    <string name="var_sim_name">接收 SIM 卡在手机中设置的自定义名称</string>
-    <string name="var_number">接收 SIM 卡对应的本机手机号码</string>
 
     <string name="perm_sheet_title">开启转发前需要授权</string>
     <string name="perm_sheet_sms_title">转发短信前需要授权</string>

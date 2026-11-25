@@ -56,6 +56,8 @@ import com.hypai.fion.ui.design.ScreenScaffold
 import com.hypai.fion.ui.design.SheetButton
 import com.hypai.fion.ui.design.SwitchRow
 import com.hypai.fion.ui.design.Type
+import com.hypai.fion.ui.screen.forward.labelRes
+import com.hypai.fion.ui.screen.forward.titleRes
 
 private const val BARK_WIKI = "https://bark.day.app/#/?id=bark"
 private const val PRIVACY_POLICY_EN = "https://fion.hypai.org/privacy"

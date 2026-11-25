@@ -129,4 +129,36 @@ class TemplateTest {
         assertEquals(setOf(SimKey.Unknown to SimTag()), messages.map { it.simKey to it.sim }.toSet())
         assertEquals(1, messages.map { it.id }.toSet().size)
     }
+
+    @Test
+    fun `findTemplateTokens matches renderer boundaries and kind variables exclude inapplicable ones`() {
+        val tokens = findTemplateTokens("a {发件人} {未知} {{time}}")
+
+        assertEquals(
+            listOf(
+                TemplateToken(2, 7, TemplateVariable.From),
+                TemplateToken(14, 20, TemplateVariable.Time),
+            ),
+            tokens,
+        )
+        assertEquals(false, TemplateVariable.CallCount in EventKind.Sms.templateVariables())
+        assertEquals(true, TemplateVariable.Content in EventKind.Sms.templateVariables())
+        assertEquals(false, TemplateVariable.Content in EventKind.MissedCall.templateVariables())
+        assertEquals(true, TemplateVariable.CallCount in EventKind.MissedCall.templateVariables())
+    }
+
+    @Test
+    fun `english display names are capitalized and from adapts to event kind`() {
+        for (kind in EventKind.entries) {
+            for (variable in kind.templateVariables()) {
+                val en = variable.displayName(Language.En, kind)
+                assertEquals(true, en.first().isUpperCase())
+                val zh = variable.displayName(Language.Zh, kind)
+                assertEquals(true, zh.isNotBlank())
+            }
+        }
+        assertEquals("Sender", TemplateVariable.From.displayName(Language.En, EventKind.Sms))
+        assertEquals("Caller", TemplateVariable.From.displayName(Language.En, EventKind.MissedCall))
+        assertEquals("对方号码", TemplateVariable.From.displayName(Language.Zh, EventKind.Sms))
+    }
 }

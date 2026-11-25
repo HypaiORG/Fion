@@ -40,10 +40,56 @@ enum class TemplateVariable(
         Language.En -> en
     }
 
+    fun displayName(language: Language, kind: EventKind? = null): String = when (this) {
+        From -> when (language) {
+            Language.Zh -> "对方号码"
+            Language.En -> if (kind == EventKind.MissedCall) "Caller" else "Sender"
+        }
+        Content -> when (language) {
+            Language.Zh -> "短信内容"
+            Language.En -> "Message"
+        }
+        CallCount -> when (language) {
+            Language.Zh -> "未接次数"
+            Language.En -> "Missed Count"
+        }
+        Time -> when (language) {
+            Language.Zh -> "日期时间"
+            Language.En -> "Date & Time"
+        }
+        Carrier -> when (language) {
+            Language.Zh -> "运营商"
+            Language.En -> "Carrier"
+        }
+        SimName -> when (language) {
+            Language.Zh -> "SIM 卡名"
+            Language.En -> "SIM Name"
+        }
+        Number -> when (language) {
+            Language.Zh -> "本机号码"
+            Language.En -> "SIM Number"
+        }
+    }
+
     fun token(language: Language): String = "{${label(language)}}"
+
+    fun appliesTo(kind: EventKind): Boolean = when (this) {
+        Content -> kind == EventKind.Sms
+        CallCount -> kind == EventKind.MissedCall
+        From, Time, Carrier, SimName, Number -> true
+    }
 
     fun resolve(event: ForwardEvent, zone: ZoneId, language: Language): String = extract(event, zone, language)
 }
+
+fun EventKind.templateVariables(): List<TemplateVariable> =
+    TemplateVariable.entries.filter { it.appliesTo(this) }
+
+data class TemplateToken(
+    val start: Int,
+    val end: Int,
+    val variable: TemplateVariable,
+)
 
 fun EventKind.defaultTemplate(language: Language): Template {
     val v = { variable: TemplateVariable -> variable.token(language) }
@@ -90,30 +136,39 @@ private val VARIABLES_BY_LABEL = TemplateVariable.entries
 
 private val TIME_FORMAT = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm")
 
-fun renderTemplate(template: String, values: Map<TemplateVariable, String>): String {
-    if (!template.contains('{')) return template
-    val out = StringBuilder(template.length)
+fun findTemplateTokens(template: String): List<TemplateToken> {
+    if (!template.contains('{')) return emptyList()
+    val tokens = mutableListOf<TemplateToken>()
     var cursor = 0
     val len = template.length
     while (cursor < len) {
         val open = template.indexOf('{', cursor)
-        if (open < 0) {
-            out.append(template, cursor, len)
-            break
-        }
-        out.append(template, cursor, open)
+        if (open < 0) break
         var scan = open + 1
         while (scan < len && template[scan] != '{' && template[scan] != '}') scan++
         if (scan < len && template[scan] == '}') {
-            val replacement = VARIABLES_BY_LABEL[template.substring(open + 1, scan).trim()]?.let(values::get)
-            if (replacement != null) out.append(replacement) else out.append(template, open, scan + 1)
+            val variable = VARIABLES_BY_LABEL[template.substring(open + 1, scan).trim()]
+            if (variable != null) tokens.add(TemplateToken(open, scan + 1, variable))
             cursor = scan + 1
         } else {
-            val next = if (scan > open + 1) scan else open + 1
-            out.append(template, open, next)
-            cursor = next
+            cursor = if (scan > open + 1) scan else open + 1
         }
     }
+    return tokens
+}
+
+fun renderTemplate(template: String, values: Map<TemplateVariable, String>): String {
+    val tokens = findTemplateTokens(template)
+    if (tokens.isEmpty()) return template
+    val out = StringBuilder(template.length)
+    var cursor = 0
+    for (token in tokens) {
+        out.append(template, cursor, token.start)
+        val replacement = values[token.variable]
+        if (replacement != null) out.append(replacement) else out.append(template, token.start, token.end)
+        cursor = token.end
+    }
+    out.append(template, cursor, template.length)
     return out.toString()
 }
 

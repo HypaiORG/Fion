@@ -1,4 +1,4 @@
-package com.hypai.fion.ui.screen
+package com.hypai.fion.ui.screen.forward
 
 import androidx.annotation.StringRes
 import androidx.compose.animation.animateColorAsState
@@ -12,14 +12,9 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.heightIn
-import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -32,7 +27,6 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
-import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -43,7 +37,6 @@ import com.hypai.fion.bark.BARK_SOUNDS
 import com.hypai.fion.bark.BarkLevel
 import com.hypai.fion.forward.EventKind
 import com.hypai.fion.forward.Template
-import com.hypai.fion.forward.TemplateVariable
 import com.hypai.fion.forward.groupChoice
 import com.hypai.fion.forward.resolve
 import com.hypai.fion.forward.templateChoice
@@ -66,6 +59,7 @@ import com.hypai.fion.ui.design.SegmentedChoice
 import com.hypai.fion.ui.design.SheetButton
 import com.hypai.fion.ui.design.Type
 import com.hypai.fion.ui.design.rememberDraft
+import com.hypai.fion.ui.screen.PermissionSheet
 
 @get:StringRes
 val EventKind.titleRes: Int
@@ -92,18 +86,6 @@ private val BarkLevel.descriptionRes: Int
         BarkLevel.Critical -> R.string.level_critical_desc
     }
 
-@get:StringRes
-private val TemplateVariable.descriptionRes: Int
-    get() = when (this) {
-        TemplateVariable.From -> R.string.var_from
-        TemplateVariable.Content -> R.string.var_content
-        TemplateVariable.CallCount -> R.string.var_call_count
-        TemplateVariable.Time -> R.string.var_time
-        TemplateVariable.Carrier -> R.string.var_carrier
-        TemplateVariable.SimName -> R.string.var_sim_name
-        TemplateVariable.Number -> R.string.var_number
-    }
-
 @Composable
 fun ForwardScreen(
     kind: EventKind,
@@ -117,7 +99,6 @@ fun ForwardScreen(
     val form = rememberDraft(saved, onChange, key = kind)
     val draft = form.value
     val edit = form::edit
-    var showVariables by rememberSaveable { mutableStateOf(false) }
     var pickingSound by rememberSaveable { mutableStateOf(false) }
     var askingPermission by rememberSaveable { mutableStateOf(false) }
     val language = currentLanguage()
@@ -156,30 +137,23 @@ fun ForwardScreen(
             )
         }
 
-        FormCard(
-            Icons.Template,
-            Palette.NavySurface,
-            Palette.Navy,
-            stringResource(R.string.forward_template),
-            action = {
-                IconButton(onClick = { showVariables = true }, Modifier.offset(x = 8.dp)) {
-                    Icon(Icons.Info, contentDescription = stringResource(R.string.forward_show_variables), Modifier.size(22.dp), tint = Palette.Muted)
-                }
-            },
-        ) {
-            FormField(
+        FormCard(Icons.Template, Palette.NavySurface, Palette.Navy, stringResource(R.string.forward_template)) {
+            TemplateField(
                 value = template.title,
                 onValueChange = { editTemplate(template.copy(title = it)) },
                 label = stringResource(R.string.forward_template_title),
-                textStyle = Type.Option,
+                kind = kind,
+                language = language,
                 keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next),
             )
-            FormField(
+            TemplateField(
                 value = template.body,
                 onValueChange = { editTemplate(template.copy(body = it)) },
                 label = stringResource(R.string.forward_template_body),
+                kind = kind,
+                language = language,
                 lines = 4,
-                textStyle = Type.FieldMultiline,
+                hint = stringResource(R.string.forward_template_hint),
             )
         }
 
@@ -205,8 +179,6 @@ fun ForwardScreen(
             )
         }
     }
-
-    if (showVariables) VariablesSheet { showVariables = false }
 
     if (pickingSound) {
         SoundSheet(
@@ -274,26 +246,6 @@ private fun SoundSheet(current: String, default: String, onPick: (String) -> Uni
                     selected = sound == selected,
                     trailing = { if (sound == default) Text(stringResource(R.string.sound_default), style = Type.Body, color = Palette.Muted) },
                 ) { selected = sound }
-            }
-        }
-    }
-}
-
-@Composable
-private fun VariablesSheet(onDismiss: () -> Unit) {
-    val language = currentLanguage()
-    AppSheet(
-        title = stringResource(R.string.variables_title),
-        subtitle = stringResource(R.string.variables_subtitle),
-        onDismiss = onDismiss,
-    ) {
-        TemplateVariable.entries.forEach { variable ->
-            Column(
-                Modifier.heightIn(min = 64.dp).padding(horizontal = 24.dp, vertical = 8.dp),
-                verticalArrangement = Arrangement.spacedBy(2.dp, Alignment.CenterVertically),
-            ) {
-                Text(variable.token(language), style = Type.FieldMultiline.copy(fontFamily = FontFamily.Monospace), color = Palette.Navy)
-                Text(stringResource(variable.descriptionRes), style = Type.Secondary, color = Palette.Muted)
             }
         }
     }

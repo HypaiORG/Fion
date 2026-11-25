@@ -122,6 +122,64 @@ fun ActionPillTag(text: String, modifier: Modifier = Modifier) {
 }
 
 @Composable
+internal fun FormFieldFrame(
+    label: String,
+    focused: Boolean,
+    singleLine: Boolean,
+    modifier: Modifier = Modifier,
+    isError: Boolean = false,
+    prefix: String? = null,
+    textStyle: TextStyle = Type.Field,
+    trailing: @Composable () -> Unit = {},
+    content: @Composable () -> Unit,
+) {
+    val borderColor = animateColorAsState(
+        when {
+            focused -> Palette.Navy
+            isError -> Palette.Error
+            else -> Palette.Ink.copy(alpha = 0.14f)
+        },
+        tween(150),
+        label = "fieldBorder",
+    )
+    val borderWidth = animateDpAsState(if (focused) 2.dp else 1.dp, tween(150), label = "fieldBorderWidth")
+    Row(
+        modifier
+            .fillMaxWidth()
+            .heightIn(min = 60.dp)
+            .clip(FieldShape)
+            .background(Color.White.copy(alpha = 0.72f))
+            .drawWithContent {
+                drawContent()
+                val width = borderWidth.value.toPx()
+                val radius = FieldCorner.toPx() - width / 2
+                drawRoundRect(
+                    borderColor.value,
+                    topLeft = Offset(width / 2, width / 2),
+                    size = Size(size.width - width, size.height - width),
+                    cornerRadius = CornerRadius(radius),
+                    style = Stroke(width),
+                )
+            },
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Column(
+            Modifier
+                .weight(1f)
+                .padding(start = 16.dp, end = 16.dp, top = 8.dp, bottom = if (singleLine) 6.dp else 12.dp),
+            verticalArrangement = Arrangement.spacedBy(if (singleLine) 2.dp else 4.dp),
+        ) {
+            Text(label, style = Type.Caption, color = Palette.Muted)
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                if (prefix != null) Text(prefix, style = textStyle, color = Palette.Muted)
+                Box(Modifier.weight(1f)) { content() }
+            }
+        }
+        trailing()
+    }
+}
+
+@Composable
 fun FormField(
     value: String,
     onValueChange: (String) -> Unit,
@@ -139,16 +197,6 @@ fun FormField(
 ) {
     val interaction = remember { MutableInteractionSource() }
     val focused by interaction.collectIsFocusedAsState()
-    val borderColor = animateColorAsState(
-        when {
-            focused -> Palette.Navy
-            isError -> Palette.Error
-            else -> Palette.Ink.copy(alpha = 0.14f)
-        },
-        tween(150),
-        label = "fieldBorder",
-    )
-    val borderWidth = animateDpAsState(if (focused) 2.dp else 1.dp, tween(150), label = "fieldBorderWidth")
     val singleLine = lines == 1
     Column(modifier.fillMaxWidth().animateContentSize(tween(200, easing = Motion.Standard)), verticalArrangement = Arrangement.spacedBy(6.dp)) {
         BasicTextField(
@@ -163,40 +211,16 @@ fun FormField(
             interactionSource = interaction,
             cursorBrush = SolidColor(Palette.Navy),
             decorationBox = { field ->
-                Row(
-                    Modifier
-                        .fillMaxWidth()
-                        .heightIn(min = 60.dp)
-                        .clip(FieldShape)
-                        .background(Color.White.copy(alpha = 0.72f))
-                        .drawWithContent {
-                            drawContent()
-                            val width = borderWidth.value.toPx()
-                            val radius = FieldCorner.toPx() - width / 2
-                            drawRoundRect(
-                                borderColor.value,
-                                topLeft = Offset(width / 2, width / 2),
-                                size = Size(size.width - width, size.height - width),
-                                cornerRadius = CornerRadius(radius),
-                                style = Stroke(width),
-                            )
-                        },
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Column(
-                        Modifier
-                            .weight(1f)
-                            .padding(start = 16.dp, end = 16.dp, top = 8.dp, bottom = if (singleLine) 6.dp else 12.dp),
-                        verticalArrangement = Arrangement.spacedBy(if (singleLine) 2.dp else 4.dp),
-                    ) {
-                        Text(label, style = Type.Caption, color = Palette.Muted)
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            if (prefix != null) Text(prefix, style = textStyle, color = Palette.Muted)
-                            Box(Modifier.weight(1f)) { field() }
-                        }
-                    }
-                    trailing()
-                }
+                FormFieldFrame(
+                    label = label,
+                    focused = focused,
+                    singleLine = singleLine,
+                    isError = isError,
+                    prefix = prefix,
+                    textStyle = textStyle,
+                    trailing = trailing,
+                    content = field,
+                )
             },
         )
         if (hint != null) {
