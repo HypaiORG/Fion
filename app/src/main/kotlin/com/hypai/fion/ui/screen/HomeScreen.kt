@@ -174,7 +174,7 @@ fun HomeScreen(
             .windowInsetsPadding(WindowInsets.safeDrawing)
             .verticalScroll(scroll, enabled = scroll.maxValue > 0)
             .padding(horizontal = 16.dp)
-            .padding(top = 8.dp, bottom = 24.dp),
+            .padding(top = 4.dp, bottom = 16.dp),
         top = {
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                 Box(Modifier.size(48.dp), contentAlignment = Alignment.Center) {
@@ -219,7 +219,7 @@ fun HomeScreen(
             }
             TotalCard(stats)
         }
-        Row(Modifier.height(IntrinsicSize.Max), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+        Row(Modifier.height(IntrinsicSize.Max), horizontalArrangement = Arrangement.spacedBy(SectionGap)) {
             MetricCard(
                 icon = Icons.Check,
                 tint = Palette.Navy,
@@ -227,7 +227,7 @@ fun HomeScreen(
                 title = stringResource(R.string.home_success_rate),
                 value = listOf(stats.successRate?.let { String.format(Locale.US, "%.1f", it * 100) } ?: "--"),
                 unit = "%",
-                decoration = { ShieldDecor(Modifier.align(Alignment.BottomEnd).offset(18.dp, 22.dp)) },
+                decoration = { ShieldDecor(Modifier.align(Alignment.BottomEnd).offset(20.dp, 26.dp)) },
             )
             MetricCard(
                 icon = Icons.Bolt,
@@ -236,7 +236,7 @@ fun HomeScreen(
                 title = stringResource(R.string.home_latency),
                 value = stats.averageLatencyMs?.fitCandidates() ?: listOf("--"),
                 unit = "ms",
-                decoration = { StopwatchDecor(Modifier.align(Alignment.BottomEnd).offset(20.dp, 26.dp)) },
+                decoration = { StopwatchDecor(Modifier.align(Alignment.BottomEnd).offset(22.dp, 30.dp)) },
             )
         }
         SimCard(stats)
@@ -256,12 +256,13 @@ fun HomeScreen(
 }
 
 private val PowerMax = 208.dp
-private val PowerMin = 120.dp
+private val PowerMin = 108.dp
 private const val POWER_MIDDLE_RATIO = 168f / 208f
 private const val POWER_CORE_RATIO = 128f / 168f
 private const val POWER_ICON_RATIO = 40f / 128f
 private val ContentMaxWidth = 560.dp
-private val SectionGap = 12.dp
+private val SectionGap = 10.dp
+private val CardPadding = PaddingValues(horizontal = 18.dp, vertical = 14.dp)
 private val SimShareMax = 140.dp
 
 @Composable
@@ -398,13 +399,13 @@ private fun NoticeBanner(notice: Notice, modifier: Modifier, onClick: () -> Unit
             .fillMaxWidth()
             .glass()
             .clickable(role = Role.Button, onClick = onClick)
-            .heightIn(min = 66.dp)
-            .padding(start = 14.dp, end = 12.dp, top = 12.dp, bottom = 12.dp),
+            .heightIn(min = 56.dp)
+            .padding(start = 14.dp, end = 12.dp, top = 8.dp, bottom = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(14.dp),
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         Box {
-            IconBadge(look.icon, Palette.AmberSurface, Palette.Copper, size = 40.dp)
+            IconBadge(look.icon, Palette.AmberSurface, Palette.Copper, size = 36.dp, iconSize = 18.dp)
             Box(
                 Modifier
                     .align(Alignment.TopEnd)
@@ -430,8 +431,9 @@ private fun NoticeBanner(notice: Notice, modifier: Modifier, onClick: () -> Unit
 @Composable
 private fun TotalCard(stats: Stats) {
     GlassCard(
-        spacing = 18.dp,
-        decoration = { EnvelopeDecor(Modifier.align(Alignment.TopEnd).offset((-14).dp, 6.dp)) },
+        padding = CardPadding,
+        spacing = 10.dp,
+        decoration = { EnvelopeDecor(Modifier.align(Alignment.TopEnd).offset((-14).dp, (-2).dp)) },
     ) {
         Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
             Text(stringResource(R.string.home_total), style = Type.Secondary, color = Palette.Muted)
@@ -442,10 +444,10 @@ private fun TotalCard(stats: Stats) {
         }
         val breakdown = stringResource(R.string.home_breakdown, stats.sms, stats.missedCalls)
         Row(
-            Modifier.fillMaxWidth().height(12.dp).clearAndSetSemantics { contentDescription = breakdown },
+            Modifier.fillMaxWidth().height(8.dp).clearAndSetSemantics { contentDescription = breakdown },
             horizontalArrangement = Arrangement.spacedBy(4.dp),
         ) {
-            val bar = RoundedCornerShape(6.dp)
+            val bar = RoundedCornerShape(4.dp)
             if (stats.delivered == 0L) {
                 Box(Modifier.weight(1f).fillMaxSize().clip(bar).background(Palette.Hairline))
             }
@@ -469,7 +471,7 @@ private fun TotalCard(stats: Stats) {
 
 @Composable
 private fun RowScope.Breakdown(label: String, count: Long, dot: Color) {
-    Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+    Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
             Box(Modifier.size(8.dp).clip(CircleShape).background(dot))
             Text(label, style = Type.Secondary, color = Palette.Muted)
@@ -488,14 +490,14 @@ private fun RowScope.MetricCard(
     unit: String,
     decoration: @Composable BoxScope.() -> Unit,
 ) {
-    GlassCard(Modifier.weight(1f).fillMaxHeight(), PaddingValues(16.dp), spacing = 12.dp, decoration = decoration) {
+    GlassCard(Modifier.weight(1f).fillMaxHeight(), PaddingValues(horizontal = 16.dp, vertical = 12.dp), spacing = 8.dp, decoration = decoration) {
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            Box(Modifier.size(36.dp).clip(CircleShape).background(iconBackground), contentAlignment = Alignment.Center) {
-                Icon(icon, contentDescription = null, Modifier.size(18.dp), tint = tint)
+            Box(Modifier.size(32.dp).clip(CircleShape).background(iconBackground), contentAlignment = Alignment.Center) {
+                Icon(icon, contentDescription = null, Modifier.size(16.dp), tint = tint)
             }
             Text(title, style = Type.Label, color = Palette.Ink)
         }
-        Row(Modifier.padding(top = 10.dp), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+        Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
             FitText(value, Type.Metric, 16.sp, Palette.Ink, Modifier.alignByBaseline().weight(1f, fill = false))
             Text(unit, Modifier.alignByBaseline(), style = Type.Body, color = Palette.Muted)
         }
@@ -506,7 +508,7 @@ private fun RowScope.MetricCard(
 private fun ProgressBar(fraction: Float, color: Color) {
     val shown by animateFloatAsState(fraction, tween(600, easing = Motion.EmphasizedDecelerate), label = "progress")
     Box(
-        Modifier.fillMaxWidth().height(8.dp).clip(CircleShape).background(Palette.Track).drawBehind {
+        Modifier.fillMaxWidth().height(6.dp).clip(CircleShape).background(Palette.Track).drawBehind {
             drawRoundRect(color, size = size.copy(width = size.width * shown), cornerRadius = CornerRadius(size.height / 2))
         },
     )
@@ -516,7 +518,8 @@ private fun ProgressBar(fraction: Float, color: Color) {
 private fun SimCard(stats: Stats) {
     GlassCard(
         Modifier.animateContentSize(tween(300, easing = Motion.Standard)),
-        spacing = 14.dp,
+        padding = CardPadding,
+        spacing = 10.dp,
         decoration = { SimDecor(Modifier.align(Alignment.TopEnd).offset(8.dp, (-26).dp)) },
     ) {
         Text(stringResource(R.string.home_by_sim), style = Type.CardTitle, color = Palette.Ink)
@@ -529,7 +532,7 @@ private fun SimCard(stats: Stats) {
             val slotName = sim.slot?.let { stringResource(R.string.sim_slot_label, it + 1) }
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 MetalSim(sim.slot, Modifier.semantics { slotName?.let { contentDescription = it } })
-                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         Text(
                             sim.title.ifEmpty { stringResource(R.string.unknown_sim) },
