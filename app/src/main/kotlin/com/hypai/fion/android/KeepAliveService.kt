@@ -60,14 +60,7 @@ class KeepAliveService : Service() {
         }
         active = true
         if (intent == null) {
-            val app = appContainer
-            app.scope.launch {
-                if (!app.coordinator.shouldKeepAlive()) {
-                    stopSelf(startId)
-                } else {
-                    syncCallLogObserver(app.coordinator.shouldWatchCallLog())
-                }
-            }
+            appContainer.scope.launch { appContainer.coordinator.reconcile() }
         } else {
             syncCallLogObserver(intent.getBooleanExtra(EXTRA_WATCH_CALL_LOG, false))
         }
@@ -175,9 +168,8 @@ class KeepAliveService : Service() {
                 if (active) context.stopService(Intent(context, KeepAliveService::class.java))
                 return
             }
-            val effectiveWatch = watchCallLog && context.isGranted(Manifest.permission.READ_CALL_LOG)
-            if (active && watchingCallLog == effectiveWatch) return
-            val intent = Intent(context, KeepAliveService::class.java).putExtra(EXTRA_WATCH_CALL_LOG, effectiveWatch)
+            if (active && watchingCallLog == watchCallLog) return
+            val intent = Intent(context, KeepAliveService::class.java).putExtra(EXTRA_WATCH_CALL_LOG, watchCallLog)
             try {
                 context.startForegroundService(intent)
             } catch (_: ForegroundServiceStartNotAllowedException) {

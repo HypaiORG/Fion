@@ -11,7 +11,7 @@ import com.hypai.fion.android.SystemCallLog
 import com.hypai.fion.android.bootCount
 import com.hypai.fion.android.isNetworkAvailable
 import com.hypai.fion.android.language
-import com.hypai.fion.android.notificationsEnabled
+import com.hypai.fion.android.readiness
 import com.hypai.fion.bark.BarkClient
 import com.hypai.fion.bark.HttpsTransport
 import com.hypai.fion.forward.Forwarder
@@ -79,12 +79,13 @@ class AppContainer(private val context: Context) {
             outbox = outbox,
             forwarder = forwarder,
             missedCalls = missedCalls,
-            notificationsEnabled = context::notificationsEnabled,
+            readReadiness = context::readiness,
             scheduler = object : SystemScheduler {
                 override fun reconcileKeepAlive(active: Boolean, watchCallLog: Boolean) =
                     KeepAliveService.reconcile(context, active, watchCallLog)
 
-                override fun ensureCallLogWatch() = ForwardJobs.ensureCallLogWatch(context)
+                override fun ensureCallLogWatch(runningJobId: Int?) =
+                    ForwardJobs.ensureCallLogWatch(context, runningJobId)
                 override fun cancelCallLogWatch() = ForwardJobs.cancelCallLogWatch(context)
                 override fun syncCallLogAsync() = ForwardJobs.syncCallLogAsync(context)
                 override fun scheduleRetry(replace: Boolean) = ForwardJobs.scheduleRetry(context, replace)

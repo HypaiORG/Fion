@@ -9,10 +9,18 @@ import com.hypai.fion.store.ForwardStateStore
 import com.hypai.fion.store.Outbox
 import com.hypai.fion.store.Settings
 import com.hypai.fion.store.SettingsStore
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
+
+fun Settings.effectiveChannels(readiness: Readiness): Set<EventKind> =
+    if (forwarding) channels.filterTo(LinkedHashSet(), readiness::allows) else emptySet()
 
 interface SystemScheduler {
     fun reconcileKeepAlive(active: Boolean, watchCallLog: Boolean)
-    fun ensureCallLogWatch()
+    fun ensureCallLogWatch(runningJobId: Int? = null)
     fun cancelCallLogWatch()
     fun syncCallLogAsync()
     fun scheduleRetry(replace: Boolean)
@@ -25,26 +33,29 @@ class RuntimeCoordinator(
     private val outbox: Outbox,
     private val forwarder: Forwarder,
     private val missedCalls: MissedCallSync,
-    private val notificationsEnabled: () -> Boolean,
+    private val readReadiness: () -> Readiness,
     private val scheduler: SystemScheduler,
 ) {
-    private fun keepAliveWanted(settings: Settings, state: ForwardState): Boolean =
-        forwarder.isActive(settings, state) && settings.persistentNotification
+    private val reconcileLock = Mutex()
+    private val _readiness = MutableStateFlow(readReadiness())
+    val readiness: StateFlow<Readiness> = _readiness.asStateFlow()
 
-    private fun callLogWatchWanted(settings: Settings, state: ForwardState): Boolean =
-        forwarder.isActive(settings, state) && settings.forwards(EventKind.MissedCall)
+    fun refreshReadiness(): Readiness = readReadiness().also { _readiness.value = it }
 
-    suspend fun shouldKeepAlive(): Boolean =
-        keepAliveWanted(settingsStore.snapshot(), stateStore.snapshot()) && notificationsEnabled()
+    private fun activeChannels(settings: Settings, state: ForwardState, readiness: Readiness): Set<EventKind> =
+        if (forwarder.isActive(settings, state)) settings.effectiveChannels(readiness) else emptySet()
 
     suspend fun shouldWatchCallLog(): Boolean =
-        callLogWatchWanted(settingsStore.snapshot(), stateStore.snapshot())
+        EventKind.MissedCall in activeChannels(settingsStore.snapshot(), stateStore.snapshot(), refreshReadiness())
 
     suspend fun updateSettings(transform: (Settings) -> Settings) {
         val (before, after) = settingsStore.update(
             beforeCommit = { prev, next ->
                 val state = stateStore.snapshot()
-                if (!callLogWatchWanted(prev, state) && callLogWatchWanted(next, state)) {
+                val current = refreshReadiness()
+                if (EventKind.MissedCall !in activeChannels(prev, state, current) &&
+                    EventKind.MissedCall in activeChannels(next, state, current)
+                ) {
                     missedCalls.advanceWatermark()
                 }
             },
@@ -57,45 +68,50 @@ class RuntimeCoordinator(
         reconcile(replaceRetry = retryReset)
     }
 
-    suspend fun completeOnboarding(readiness: Readiness) {
+    suspend fun completeOnboarding() {
         stateStore.completeOnboarding()
-        if (!readiness.forwardable) updateSettings { it.withForwarding(false) }
+        reconcile()
     }
 
     suspend fun resetStats() {
         stateStore.resetStats()
     }
 
-    suspend fun onForeground(readiness: Readiness) {
-        if (stateStore.snapshot().onboardingDone && !readiness.forwardable) {
-            updateSettings { it.withForwarding(false) }
-        }
+    suspend fun onForeground() {
         forwarder.activate()
-        reconcile(replaceRetry = false)
+        reconcile()
         if (shouldWatchCallLog()) missedCalls.sync()
     }
 
     suspend fun onBootCompleted() {
         if (settingsStore.snapshot().autoStartOnBoot) forwarder.activate()
-        reconcile(replaceRetry = false)
+        reconcile()
         if (shouldWatchCallLog()) scheduler.syncCallLogAsync()
     }
 
     suspend fun onPackageReplaced() {
-        reconcile(replaceRetry = false)
+        reconcile()
         if (shouldWatchCallLog()) scheduler.syncCallLogAsync()
     }
 
-    suspend fun reconcile(replaceRetry: Boolean = false) {
-        val settings = settingsStore.snapshot()
-        val state = stateStore.snapshot()
-        val watchCallLog = callLogWatchWanted(settings, state)
-        val keepAlive = keepAliveWanted(settings, state) && notificationsEnabled()
-        scheduler.reconcileKeepAlive(active = keepAlive, watchCallLog = watchCallLog)
-        if (watchCallLog) scheduler.ensureCallLogWatch() else scheduler.cancelCallLogWatch()
-        when {
-            !outbox.hasAny() -> scheduler.cancelRetry()
-            outbox.hasAny(forwarder.enabledKinds(settings, state)) -> scheduler.scheduleRetry(replace = replaceRetry)
-        }
+    suspend fun onCallLogTriggered(runningJobId: Int) {
+        reconcile(runningCallLogJobId = runningJobId)
+        if (shouldWatchCallLog()) missedCalls.sync()
     }
+
+    suspend fun reconcile(replaceRetry: Boolean = false, runningCallLogJobId: Int? = null) =
+        reconcileLock.withLock {
+            val settings = settingsStore.snapshot()
+            val state = stateStore.snapshot()
+            val current = refreshReadiness()
+            val channels = activeChannels(settings, state, current)
+            val watchCallLog = EventKind.MissedCall in channels
+            val keepAlive = channels.isNotEmpty() && settings.persistentNotification && current.notifications
+            scheduler.reconcileKeepAlive(active = keepAlive, watchCallLog = watchCallLog)
+            if (watchCallLog) scheduler.ensureCallLogWatch(runningCallLogJobId) else scheduler.cancelCallLogWatch()
+            when {
+                !outbox.hasAny() -> scheduler.cancelRetry()
+                outbox.hasAny(forwarder.enabledKinds(settings, state)) -> scheduler.scheduleRetry(replace = replaceRetry)
+            }
+        }
 }

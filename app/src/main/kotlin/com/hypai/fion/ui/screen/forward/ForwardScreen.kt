@@ -113,8 +113,9 @@ fun ForwardScreen(
         clearFocusOnImeHide = true,
     ) {
         GlassCard(padding = PaddingValues(16.dp)) {
-            val badge by animateColorAsState(if (enabled) Palette.NavySurface else Palette.Dormant, tween(200), label = "enableBadge")
-            val badgeTint by animateColorAsState(if (enabled) Palette.Navy else Palette.Outline, tween(200), label = "enableBadgeTint")
+            val active = enabled && readiness.allows(kind)
+            val badge by animateColorAsState(if (active) Palette.NavySurface else Palette.Dormant, tween(200), label = "enableBadge")
+            val badgeTint by animateColorAsState(if (active) Palette.Navy else Palette.Outline, tween(200), label = "enableBadgeTint")
             BleedSwitchRow(
                 title = stringResource(
                     when (kind) {
@@ -125,11 +126,15 @@ fun ForwardScreen(
                 subtitle = stringResource(
                     when {
                         !enabled -> R.string.forward_off
+                        !readiness.allows(kind) -> when (kind) {
+                            EventKind.Sms -> R.string.forward_sms_paused
+                            EventKind.MissedCall -> R.string.forward_call_paused
+                        }
                         kind == EventKind.Sms -> R.string.forward_sms_on
                         else -> R.string.forward_call_on
                     },
                 ),
-                checked = enabled,
+                checked = active,
                 onCheckedChange = { on -> if (on && !readiness.allows(kind)) askingPermission = true else onEnabledChange(on) },
                 titleStyle = Type.CardTitle.copy(lineHeight = 24.sp),
                 minHeight = 40.dp,

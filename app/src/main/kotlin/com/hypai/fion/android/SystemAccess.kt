@@ -50,8 +50,6 @@ data class Readiness(
         EventKind.MissedCall -> callLog
     }
 
-    val forwardable: Boolean get() = EventKind.entries.any(::allows)
-
     fun keepAliveNotice(persistentNotification: Boolean): Boolean = notifications && persistentNotification
 
     fun backgroundReady(persistentNotification: Boolean): Boolean =

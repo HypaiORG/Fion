@@ -35,7 +35,9 @@ import androidx.compose.ui.unit.sp
 import com.hypai.fion.BuildConfig
 import com.hypai.fion.R
 import com.hypai.fion.android.PermissionHealth
+import com.hypai.fion.android.Readiness
 import com.hypai.fion.android.applyAppLanguage
+import com.hypai.fion.android.health
 import com.hypai.fion.bark.BarkSettings
 import com.hypai.fion.bark.endpoint
 import com.hypai.fion.forward.EventKind
@@ -75,12 +77,13 @@ private fun Language.displayName(): String = stringResource(
 @Composable
 fun SettingsScreen(
     settings: Settings,
-    permissionHealth: PermissionHealth,
+    readiness: Readiness,
     onUpdate: ((Settings) -> Settings) -> Unit,
     onResetStats: () -> Unit,
     onOpen: (Screen) -> Unit,
     onBack: () -> Unit,
 ) {
+    val permissionHealth = readiness.health(settings.persistentNotification)
     val haptics = LocalHapticFeedback.current
     val uriHandler = LocalUriHandler.current
     val context = LocalContext.current
@@ -124,11 +127,16 @@ fun SettingsScreen(
             EventKind.entries.forEach { kind ->
                 val profile = settings.push(kind)
                 val look = kind.look
+                val statusRes = when {
+                    !settings.forwards(kind) -> R.string.forward_summary_off
+                    readiness.allows(kind) -> R.string.forward_summary_on
+                    else -> R.string.forward_summary_paused
+                }
                 ListRow(
                     title = stringResource(kind.titleRes),
                     subtitle = stringResource(
                         R.string.forward_summary,
-                        stringResource(if (settings.forwards(kind)) R.string.forward_summary_on else R.string.forward_summary_off),
+                        stringResource(statusRes),
                         profile.sound,
                         stringResource(profile.level.labelRes),
                     ),

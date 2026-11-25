@@ -81,12 +81,7 @@ class CallLogJobService : JobService() {
     override fun onStartJob(params: JobParameters): Boolean {
         val app = appContainer
         running[params.jobId] = app.scope.launch {
-            if (app.coordinator.shouldWatchCallLog()) {
-                ForwardJobs.ensureCallLogWatch(this@CallLogJobService, runningJobId = params.jobId)
-                app.missedCalls.sync()
-            } else {
-                ForwardJobs.cancelCallLogWatch(this@CallLogJobService)
-            }
+            app.coordinator.onCallLogTriggered(params.jobId)
             jobFinished(params, false)
         }
         return true

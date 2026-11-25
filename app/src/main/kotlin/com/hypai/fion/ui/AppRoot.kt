@@ -7,10 +7,7 @@ import androidx.activity.SystemBarStyle
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.lifecycle.ViewModel
@@ -29,8 +26,6 @@ import androidx.navigation3.ui.NavDisplay
 import com.hypai.fion.AppContainer
 import com.hypai.fion.R
 import com.hypai.fion.android.Readiness
-import com.hypai.fion.android.health
-import com.hypai.fion.android.readiness
 import com.hypai.fion.appContainer
 import com.hypai.fion.forward.EventKind
 import com.hypai.fion.forward.Language
@@ -68,11 +63,12 @@ data class UiState(
     val settings: Settings,
     val onboardingDone: Boolean,
     val stats: Stats,
+    val readiness: Readiness,
 )
 
 class MainViewModel(private val app: AppContainer) : ViewModel() {
-    val state = combine(app.settingsStore.data, app.stateStore.data) { settings, runtime ->
-        UiState(settings = settings, onboardingDone = runtime.onboardingDone, stats = runtime.stats)
+    val state = combine(app.settingsStore.data, app.stateStore.data, app.coordinator.readiness) { settings, runtime, readiness ->
+        UiState(settings = settings, onboardingDone = runtime.onboardingDone, stats = runtime.stats, readiness = readiness)
     }
         .distinctUntilChanged()
         .stateIn(viewModelScope, SharingStarted.Eagerly, null)
@@ -85,12 +81,13 @@ class MainViewModel(private val app: AppContainer) : ViewModel() {
         viewModelScope.launch { app.coordinator.resetStats() }
     }
 
-    fun finishOnboarding(readiness: Readiness) {
-        viewModelScope.launch { app.coordinator.completeOnboarding(readiness) }
+    fun finishOnboarding() {
+        viewModelScope.launch { app.coordinator.completeOnboarding() }
     }
 
-    fun onForeground(readiness: Readiness) {
-        viewModelScope.launch { app.coordinator.onForeground(readiness) }
+    fun onForeground() {
+        app.coordinator.refreshReadiness()
+        viewModelScope.launch { app.coordinator.onForeground() }
     }
 }
 
@@ -105,32 +102,6 @@ class MainActivity : ComponentActivity() {
     }
 }
 
-private class ReadinessState(private val read: () -> Readiness) {
-    var value: Readiness by mutableStateOf(read())
-        private set
-    private var initialResumePending = true
-
-    fun refreshOnResume() {
-        if (initialResumePending) {
-            initialResumePending = false
-            return
-        }
-        value = read()
-    }
-}
-
-@Composable
-private fun rememberReadiness(onChange: (Readiness) -> Unit): ReadinessState {
-    val context = LocalContext.current
-    val state = remember { ReadinessState(context::readiness) }
-    LifecycleResumeEffect(Unit) {
-        state.refreshOnResume()
-        onChange(state.value)
-        onPauseOrDispose {}
-    }
-    return state
-}
-
 @Composable
 fun currentLanguage(): Language = Language.valueOf(stringResource(R.string.language))
 
@@ -143,7 +114,10 @@ private fun AppRoot() {
         AppBackground {}
         return
     }
-    val readiness = rememberReadiness(onChange = model::onForeground)
+    LifecycleResumeEffect(Unit) {
+        model.onForeground()
+        onPauseOrDispose {}
+    }
 
     val backStack = rememberNavBackStack(if (ui.onboardingDone) Screen.Home else Screen.Onboarding)
     val goBack = remember(backStack) { { if (backStack.size > 1) backStack.removeLastOrNull() } }
@@ -151,13 +125,14 @@ private fun AppRoot() {
     val saveableDecorator = rememberSaveableStateHolderNavEntryDecorator<NavKey>()
     val pageBackground = remember { NavEntryDecorator<NavKey> { entry -> AppBackground { entry.Content() } } }
     val decorators = remember(saveableDecorator, pageBackground) { listOf(saveableDecorator, pageBackground) }
-    val provider = remember(model, readiness, backStack, goBack, open) {
+    val provider = remember(model, backStack, goBack, open) {
         entryProvider<NavKey> {
             entry<Screen.Onboarding> {
+                val current = model.state.collectAsStateWithLifecycle().value ?: return@entry
                 OnboardingScreen(
-                    readiness = readiness.value,
+                    readiness = current.readiness,
                     onFinish = {
-                        model.finishOnboarding(readiness.value)
+                        model.finishOnboarding()
                         backStack[0] = Screen.Home
                     },
                 )
@@ -167,7 +142,7 @@ private fun AppRoot() {
                 HomeScreen(
                     settings = current.settings,
                     stats = current.stats,
-                    readiness = readiness.value,
+                    readiness = current.readiness,
                     onUpdate = model::updateSettings,
                     onOpenSettings = { open(Screen.Settings) },
                     onOpenBark = { open(Screen.Bark) },
@@ -177,7 +152,7 @@ private fun AppRoot() {
                 val current = model.state.collectAsStateWithLifecycle().value ?: return@entry
                 SettingsScreen(
                     settings = current.settings,
-                    permissionHealth = readiness.value.health(current.settings.persistentNotification),
+                    readiness = current.readiness,
                     onUpdate = model::updateSettings,
                     onResetStats = model::resetStats,
                     onOpen = open,
@@ -195,7 +170,7 @@ private fun AppRoot() {
             entry<Screen.KeepAlive> {
                 val current = model.state.collectAsStateWithLifecycle().value ?: return@entry
                 KeepAliveScreen(
-                    readiness = readiness.value,
+                    readiness = current.readiness,
                     persistentNotification = current.settings.persistentNotification,
                     onPersistentNotificationChange = { on -> model.updateSettings { it.copy(persistentNotification = on) } },
                     onBack = goBack,
@@ -205,7 +180,7 @@ private fun AppRoot() {
                 val current = model.state.collectAsStateWithLifecycle().value ?: return@entry
                 PrivacyScreen(
                     settings = current.settings,
-                    readiness = readiness.value,
+                    readiness = current.readiness,
                     onBack = goBack,
                 )
             }
@@ -215,7 +190,7 @@ private fun AppRoot() {
                     kind = key.kind,
                     enabled = current.settings.forwards(key.kind),
                     saved = current.settings.push(key.kind),
-                    readiness = readiness.value,
+                    readiness = current.readiness,
                     onEnabledChange = { on -> model.updateSettings { it.withChannel(key.kind, on) } },
                     onChange = { profile -> model.updateSettings { it.withPush(key.kind, profile) } },
                     onBack = goBack,

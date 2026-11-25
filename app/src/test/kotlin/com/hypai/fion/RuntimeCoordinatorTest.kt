@@ -31,7 +31,8 @@ import org.junit.Test
 private class RecordingScheduler : SystemScheduler {
     val keepAliveCalls = mutableListOf<Pair<Boolean, Boolean>>()
     val retryCalls = mutableListOf<Boolean>()
-    var callLogWatches = 0
+    val callLogWatchJobIds = mutableListOf<Int?>()
+    val callLogWatches: Int get() = callLogWatchJobIds.size
     var callLogCancels = 0
     var callLogSyncs = 0
     var retryCancels = 0
@@ -40,8 +41,8 @@ private class RecordingScheduler : SystemScheduler {
         keepAliveCalls += active to watchCallLog
     }
 
-    override fun ensureCallLogWatch() {
-        callLogWatches++
+    override fun ensureCallLogWatch(runningJobId: Int?) {
+        callLogWatchJobIds += runningJobId
     }
 
     override fun cancelCallLogWatch() {
@@ -63,6 +64,8 @@ private class RecordingScheduler : SystemScheduler {
 
 class RuntimeCoordinatorTest {
     private val configured = Settings(bark = BarkSettings(deviceKey = "k"))
+    private val allReady = Readiness(sms = true, callLog = true, phone = true, batteryUnrestricted = true, notifications = true)
+    private val noneReady = Readiness(sms = false, callLog = false, phone = false, batteryUnrestricted = false, notifications = false)
 
     private data class Harness(
         val coordinator: RuntimeCoordinator,
@@ -70,15 +73,17 @@ class RuntimeCoordinatorTest {
         val settings: MemoryStore<Settings>,
         val state: MemoryStore<ForwardState>,
         val outbox: MemoryOutbox,
+        val setReadiness: (Readiness) -> Unit,
     )
 
     private fun harness(
         initialSettings: Settings = configured,
         initialState: ForwardState = ForwardState(activatedBootCount = 7),
-        notificationsOn: Boolean = true,
+        initialReadiness: Readiness = allReady,
         transport: ScriptedTransport = ScriptedTransport(),
         watermark: Long = 50L,
     ): Harness {
+        var currentReadiness = initialReadiness
         val rawSettings = MemoryStore(initialSettings)
         val rawState = MemoryStore(initialState)
         val outbox = MemoryOutbox()
@@ -105,10 +110,10 @@ class RuntimeCoordinatorTest {
             outbox = outbox,
             forwarder = forwarder,
             missedCalls = missedCalls,
-            notificationsEnabled = { notificationsOn },
+            readReadiness = { currentReadiness },
             scheduler = scheduler,
         )
-        return Harness(coordinator, scheduler, rawSettings, rawState, outbox)
+        return Harness(coordinator, scheduler, rawSettings, rawState, outbox) { currentReadiness = it }
     }
 
     @Test
@@ -121,7 +126,7 @@ class RuntimeCoordinatorTest {
         env.outbox.enqueue(listOf(Message("id1", EventKind.Sms, sms.sim.key, sms.sim.tag, "t", "b", 1_000L)), Forwarder.MAX_PENDING)
 
         env.coordinator.onBootCompleted()
-        env.coordinator.onForeground(Readiness(sms = true, callLog = true, phone = true, batteryUnrestricted = true, notifications = true))
+        env.coordinator.onForeground()
 
         assertEquals(listOf(false, false), env.scheduler.retryCalls)
     }
@@ -162,12 +167,104 @@ class RuntimeCoordinatorTest {
     }
 
     @Test
-    fun `completing onboarding without forwarding permissions pauses forwarding`() = runTest {
-        val env = harness(initialState = ForwardState(onboardingDone = false, activatedBootCount = 7))
+    fun `completing onboarding without forwarding permissions preserves intent and pauses runtime`() = runTest {
+        val env = harness(
+            initialState = ForwardState(onboardingDone = false, activatedBootCount = 7),
+            initialReadiness = noneReady,
+        )
 
-        env.coordinator.completeOnboarding(Readiness(sms = false, callLog = false, phone = false, batteryUnrestricted = false, notifications = false))
+        env.coordinator.completeOnboarding()
 
         assertTrue(env.state.value.onboardingDone)
-        assertFalse(env.settings.value.forwarding)
+        assertTrue(env.settings.value.forwarding)
+        assertTrue(env.settings.value.effectiveChannels(noneReady).isEmpty())
+        assertEquals(listOf(false to false), env.scheduler.keepAliveCalls)
+        assertEquals(1, env.scheduler.callLogCancels)
+    }
+
+    @Test
+    fun `revoking only enabled channel permission stops keep alive without mutating settings`() = runTest {
+        val smsOnly = configured.withChannel(EventKind.MissedCall, false)
+        val env = harness(
+            initialSettings = smsOnly,
+            initialReadiness = allReady.copy(sms = false, callLog = true),
+        )
+
+        env.coordinator.reconcile()
+
+        assertTrue(env.settings.value.forwarding)
+        assertEquals(listOf(false to false), env.scheduler.keepAliveCalls)
+        assertEquals(1, env.scheduler.callLogCancels)
+    }
+
+    @Test
+    fun `revoking call log permission keeps sms keep alive and cancels call log watch`() = runTest {
+        val env = harness(initialReadiness = allReady.copy(callLog = false))
+
+        env.coordinator.reconcile()
+
+        assertEquals(listOf(true to false), env.scheduler.keepAliveCalls)
+        assertEquals(1, env.scheduler.callLogCancels)
+        assertEquals(0, env.scheduler.callLogWatches)
+    }
+
+    @Test
+    fun `restoring revoked permission resumes forwarding automatically without toggling settings`() = runTest {
+        val env = harness(initialReadiness = noneReady.copy(notifications = true))
+
+        env.coordinator.reconcile()
+        assertEquals(listOf(false to false), env.scheduler.keepAliveCalls)
+        assertTrue(env.settings.value.forwarding)
+
+        env.setReadiness(allReady)
+        env.coordinator.reconcile()
+
+        assertEquals(listOf(false to false, true to true), env.scheduler.keepAliveCalls)
+        assertEquals(1, env.scheduler.callLogWatches)
+        assertEquals(allReady, env.coordinator.readiness.value)
+    }
+
+    @Test
+    fun `blocking notifications stops keep alive while preserving call log watch`() = runTest {
+        val env = harness(initialReadiness = allReady)
+        env.coordinator.reconcile()
+
+        env.setReadiness(allReady.copy(notifications = false))
+        env.coordinator.reconcile()
+
+        assertEquals(listOf(true to true, false to true), env.scheduler.keepAliveCalls)
+        assertEquals(2, env.scheduler.callLogWatches)
+        assertEquals(0, env.scheduler.callLogCancels)
+    }
+
+    @Test
+    fun `call log job trigger reconciles with running job id and cancels when permission revoked`() = runTest {
+        val env = harness(initialReadiness = allReady, watermark = 77L)
+
+        env.coordinator.onCallLogTriggered(runningJobId = 4)
+
+        assertEquals(listOf<Int?>(4), env.scheduler.callLogWatchJobIds)
+        assertEquals(77L, env.state.value.callLogWatermark)
+
+        env.setReadiness(allReady.copy(sms = false, callLog = false))
+        env.coordinator.onCallLogTriggered(runningJobId = 1)
+
+        assertEquals(1, env.scheduler.callLogCancels)
+        assertEquals(false to false, env.scheduler.keepAliveCalls.last())
+    }
+
+    @Test
+    fun `boot completed without forwarding permissions does not start keep alive or call log sync`() = runTest {
+        val env = harness(
+            initialState = ForwardState(activatedBootCount = null),
+            initialReadiness = noneReady.copy(notifications = true),
+        )
+
+        env.coordinator.onBootCompleted()
+
+        assertEquals(7, env.state.value.activatedBootCount)
+        assertEquals(listOf(false to false), env.scheduler.keepAliveCalls)
+        assertEquals(0, env.scheduler.callLogSyncs)
+        assertEquals(1, env.scheduler.callLogCancels)
     }
 }

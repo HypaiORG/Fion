@@ -90,6 +90,7 @@ import com.hypai.fion.android.Readiness
 import com.hypai.fion.android.openAppDetails
 import com.hypai.fion.android.permission
 import com.hypai.fion.bark.endpoint
+import com.hypai.fion.effectiveChannels
 import com.hypai.fion.forward.EventKind
 import com.hypai.fion.store.Settings
 import com.hypai.fion.store.Stats
@@ -151,7 +152,8 @@ private sealed interface Notice {
 
 private fun notice(settings: Settings, readiness: Readiness): Notice? = when {
     settings.bark.endpoint() == null -> Notice.Bark
-    else -> EventKind.entries.firstOrNull { !readiness.allows(it) }?.let(Notice::Denied)
+    else -> EventKind.entries.firstOrNull { settings.forwards(it) && !readiness.allows(it) }?.let(Notice::Denied)
+        ?: EventKind.entries.firstOrNull { !readiness.allows(it) }?.let(Notice::Denied)
 }
 
 @Composable
@@ -168,6 +170,8 @@ fun HomeScreen(
     val context = LocalContext.current
     val request = rememberPermissionRequest { if (it == PermissionOutcome.Blocked) context.openAppDetails() }
     val notice = notice(settings, readiness)
+    val effectiveForwarding = settings.effectiveChannels(readiness).isNotEmpty()
+    val targetKinds = settings.channels.ifEmpty { EventKind.entries.toSet() }
     FitHeroLayout(
         Modifier
             .fillMaxSize()
@@ -187,11 +191,11 @@ fun HomeScreen(
         hero = {
             Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                 PowerButton(
-                    on = settings.forwarding,
+                    on = effectiveForwarding,
                     onToggle = {
                         when {
-                            settings.forwarding -> onUpdate { it.withForwarding(false) }
-                            readiness.forwardable -> onUpdate { it.withForwarding(true) }
+                            effectiveForwarding -> onUpdate { it.withForwarding(false) }
+                            targetKinds.any(readiness::allows) -> onUpdate { it.withForwarding(true) }
                             else -> askingPermission = true
                         }
                     },
@@ -244,7 +248,7 @@ fun HomeScreen(
 
     if (askingPermission) {
         PermissionSheet(
-            kinds = EventKind.entries,
+            kinds = targetKinds.toList(),
             readiness = readiness,
             onStart = {
                 onUpdate { it.withForwarding(true) }

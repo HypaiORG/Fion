@@ -83,6 +83,7 @@
     <string name="bark_encryption_note">算法、模式和密钥必须与 Bark 的「推送加密」完全一致，否则无法解密。每条推送都会自动附带随机偏移量（IV），无需额外配置。</string>
     <string name="forward_summary_on">已开启</string>
     <string name="forward_summary_off">已关闭</string>
+    <string name="forward_summary_paused">已暂停</string>
     <string name="forward_summary">%1$s · %2$s · %3$s</string>
 
     <string name="forward_sms_title">短信转发</string>
@@ -91,6 +92,8 @@
     <string name="forward_call_switch">开启未接来电转发</string>
     <string name="forward_sms_on">收到新短信时自动推送到 Bark</string>
     <string name="forward_call_on">有未接来电时自动推送到 Bark</string>
+    <string name="forward_sms_paused">已暂停，开启短信权限后恢复</string>
+    <string name="forward_call_paused">已暂停，开启通话记录权限后恢复</string>
     <string name="forward_off">已关闭，不会推送此类消息</string>
     <string name="forward_template">推送模板</string>
     <string name="forward_template_title">推送标题</string>
