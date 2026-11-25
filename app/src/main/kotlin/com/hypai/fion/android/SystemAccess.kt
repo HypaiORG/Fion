@@ -7,6 +7,8 @@ import android.content.ActivityNotFoundException
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.net.ConnectivityManager
+import android.net.NetworkCapabilities
 import android.net.Uri
 import android.os.LocaleList
 import android.os.PowerManager
@@ -101,4 +103,10 @@ fun Context.language(): Language = Language.valueOf(getString(R.string.language)
 
 fun Context.applyAppLanguage(language: Language) {
     getSystemService(LocaleManager::class.java).applicationLocales = LocaleList.forLanguageTags(language.tag)
+}
+
+fun Context.isNetworkAvailable(): Boolean {
+    val connectivity = getSystemService(ConnectivityManager::class.java) ?: return true
+    val capabilities = connectivity.getNetworkCapabilities(connectivity.activeNetwork ?: return false) ?: return false
+    return capabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)
 }

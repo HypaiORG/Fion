@@ -22,18 +22,18 @@ class MissedCallSync(
     suspend fun sync() = lock.withLock {
         val watermark = stateStore.snapshot().callLogWatermark
         val snapshot = reader.read(watermark) ?: return@withLock
-        var persistedWatermark = watermark
-        if (watermark != null) {
-            for (call in snapshot.missed) {
-                forwarder.forward(call.event) { it.copy(callLogWatermark = call.id) }
-                persistedWatermark = call.id
+        if (watermark == null || snapshot.missed.isEmpty()) {
+            if (watermark != snapshot.maxId) {
+                stateStore.settle {
+                    if (it.callLogWatermark == snapshot.maxId) it else it.copy(callLogWatermark = snapshot.maxId)
+                }
             }
+            return@withLock
         }
-        if (persistedWatermark != snapshot.maxId) {
-            stateStore.settle {
-                if (it.callLogWatermark == snapshot.maxId) it else it.copy(callLogWatermark = snapshot.maxId)
-            }
-        }
+        forwarder.forwardAll(
+            events = snapshot.missed.map { it.event },
+            progress = { if (it.callLogWatermark == snapshot.maxId) it else it.copy(callLogWatermark = snapshot.maxId) },
+        )
     }
 
     suspend fun advanceWatermark() = lock.withLock {

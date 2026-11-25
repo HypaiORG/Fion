@@ -33,23 +33,24 @@ class IncomingSmsReceiver : BroadcastReceiver() {
                     subscriptionId = intent.intExtraOrNull(SubscriptionManager.EXTRA_SUBSCRIPTION_INDEX),
                     slotIndex = intent.intExtraOrNull(SubscriptionManager.EXTRA_SLOT_INDEX),
                 )
-                val deadline = receivedElapsed + BROADCAST_BUDGET_MS
-                Intents.getMessagesFromIntent(intent).orEmpty()
+                val events = Intents.getMessagesFromIntent(intent).orEmpty()
                     .groupBy { it.displayOriginatingAddress.orEmpty() }
-                    .forEach { (from, parts) ->
-                        val remaining = (deadline - SystemClock.elapsedRealtime()).milliseconds
-                        app.forwarder.forward(
-                            event = ForwardEvent.Sms(
-                                from = from,
-                                sim = sim,
-                                occurredAtMs = parts.first().timestampMillis,
-                                receivedAtMs = receivedAt,
-                                content = parts.joinToString("") { it.displayMessageBody.orEmpty() },
-                            ),
-                            timeout = if (remaining >= 1.seconds) minOf(Forwarder.SMS_DIRECT_TIMEOUT, remaining) else Duration.ZERO,
-                            receivedElapsedMs = receivedElapsed,
+                    .map { (from, parts) ->
+                        ForwardEvent.Sms(
+                            from = from,
+                            sim = sim,
+                            occurredAtMs = parts.first().timestampMillis,
+                            receivedAtMs = receivedAt,
+                            content = parts.joinToString("") { it.displayMessageBody.orEmpty() },
                         )
                     }
+                if (events.isEmpty()) return@launch
+                val remaining = (receivedElapsed + BROADCAST_BUDGET_MS - SystemClock.elapsedRealtime()).milliseconds
+                app.forwarder.forwardAll(
+                    events = events,
+                    timeout = if (remaining >= 1.seconds) minOf(Forwarder.SMS_DIRECT_TIMEOUT, remaining) else Duration.ZERO,
+                    receivedElapsedMs = receivedElapsed,
+                )
             } finally {
                 pending.finish()
             }

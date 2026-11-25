@@ -62,7 +62,7 @@ data class Stats(
         )
     }
 
-    fun withFailed(): Stats = copy(failed = failed + 1)
+    fun withFailed(count: Int = 1): Stats = if (count <= 0) this else copy(failed = failed + count)
 }
 
 @Serializable
@@ -70,7 +70,6 @@ data class ForwardState(
     val onboardingDone: Boolean = false,
     val activatedBootCount: Int? = null,
     val callLogWatermark: Long? = null,
-    val pending: List<Message> = emptyList(),
     val stats: Stats = Stats(),
     val deliverySecret: String? = null,
 )

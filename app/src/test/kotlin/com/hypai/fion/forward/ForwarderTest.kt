@@ -33,6 +33,7 @@ class ForwarderTest {
     private val configured = Settings(bark = BarkSettings(deviceKey = "k"))
     private val settingsBacking = MemoryStore(configured)
     private val stateBacking = MemoryStore(ForwardState(activatedBootCount = 7))
+    private val outbox = MemoryOutbox()
     private val settingsStore = SettingsStore(settingsBacking)
     private val stateStore = ForwardStateStore(stateBacking)
     private val stats get() = stateBacking.value.stats
@@ -40,11 +41,13 @@ class ForwarderTest {
     private var retriesScheduled = 0
     private var retriesCancelled = 0
     private var secretsCreated = 0
+    private var networkAvailable = true
     private var language = Language.Zh
 
     private fun forwarder(transport: HttpTransport, newSecret: () -> String = { "secret-${secretsCreated++}" }) = Forwarder(
         settingsStore = settingsStore,
         stateStore = stateStore,
+        outbox = outbox,
         bark = BarkClient(transport),
         bootCount = { 7 },
         now = { clock },
@@ -53,6 +56,7 @@ class ForwarderTest {
         scheduleRetry = { retriesScheduled++ },
         cancelRetry = { retriesCancelled++ },
         newSecret = newSecret,
+        isNetworkAvailable = { networkAvailable },
     )
 
     private fun sms(receivedAt: Long = 1_000L) = ForwardEvent.Sms("10086", SimIdentity(SimKey.subscription(1), 0, "A", "主卡", ""), receivedAt, receivedAt, "hi")
@@ -67,7 +71,7 @@ class ForwarderTest {
 
         assertEquals(Stats(sms = 1, latencyTotalMs = 214, latencySamples = 1, sims = mapOf(SimKey.subscription(1) to SimTally(SimTag(0, "主卡", "A"), 1))), stats)
         assertEquals("https://api.day.app/push", transport.requests.single().first)
-        assertTrue(stateBacking.value.pending.isEmpty())
+        assertTrue(outbox.items.isEmpty())
     }
 
     @Test
@@ -122,8 +126,26 @@ class ForwarderTest {
         job.join()
 
         assertTrue(transport.requests.isEmpty())
+        assertTrue(outbox.items.isEmpty())
         assertEquals("secret", stateBacking.value.deliverySecret)
         assertEquals(Stats(), stats)
+    }
+
+    @Test
+    fun `write ahead outbox preserves message if forward is cancelled mid network call`() = runTest {
+        val interrupted = object : HttpTransport {
+            override suspend fun postJson(url: String, body: String, timeoutMs: Long): HttpResult {
+                throw kotlinx.coroutines.CancellationException("process killed mid-flight")
+            }
+        }
+        runCatching { forwarder(interrupted).forward(sms()) }
+
+        assertEquals(1, outbox.items.size)
+        assertEquals(Stats(), stats)
+
+        assertTrue(forwarder(ScriptedTransport(ok)).retryPending())
+        assertTrue(outbox.items.isEmpty())
+        assertEquals(1L, stats.delivered)
     }
 
     @Test
@@ -131,16 +153,16 @@ class ForwarderTest {
         forwarder(ScriptedTransport(badKey)).forward(call())
 
         assertEquals(Stats(failed = 1), stats)
-        assertTrue(stateBacking.value.pending.isEmpty())
+        assertTrue(outbox.items.isEmpty())
         assertEquals(0, retriesScheduled)
     }
 
     @Test
-    fun `unreachable push is queued and retry is scheduled`() = runTest {
+    fun `unreachable push remains queued and schedules retry`() = runTest {
         forwarder(ScriptedTransport(HttpResult.Failure)).forward(sms())
 
         assertEquals(Stats(), stats)
-        assertEquals(1, stateBacking.value.pending.size)
+        assertEquals(1, outbox.items.size)
         assertEquals(1, retriesScheduled)
     }
 
@@ -164,6 +186,7 @@ class ForwarderTest {
         forwarder.forward(sms())
 
         assertTrue(transport.requests.isEmpty())
+        assertTrue(outbox.items.isEmpty())
         assertEquals(Stats(), stats)
     }
 
@@ -180,22 +203,35 @@ class ForwarderTest {
     }
 
     @Test
-    fun `retry delivers in order without latency sample and stops at first unreachable`() = runTest {
+    fun `retryPending delivers strictly in arrival order and stops at first network failure`() = runTest {
         val transport = ScriptedTransport(HttpResult.Failure, HttpResult.Failure, ok, HttpResult.Failure, ok)
         val forwarder = forwarder(transport)
         forwarder.forward(sms())
         forwarder.forward(call())
 
         assertFalse(forwarder.retryPending())
-        assertEquals(listOf(EventKind.MissedCall), stateBacking.value.pending.map { it.kind })
+        assertEquals(listOf(EventKind.MissedCall), outbox.items.map { it.kind })
         assertTrue(forwarder.retryPending())
 
-        assertTrue(stateBacking.value.pending.isEmpty())
+        assertTrue(outbox.items.isEmpty())
         assertEquals(1, retriesCancelled)
         assertEquals(
             Stats(sms = 1, missedCalls = 1, sims = mapOf(SimKey.subscription(1) to SimTally(SimTag(0, "主卡", "A"), 1), SimKey.subscription(2) to SimTally(SimTag(1, "副卡", "B"), 1))),
             stats,
         )
+    }
+
+    @Test
+    fun `queued backlog is delivered in strict FIFO order`() = runTest {
+        val enqueuer = forwarder(ScriptedTransport())
+        repeat(5) { idx -> enqueuer.forward(sms(receivedAt = 1_000L + idx).copy(content = "seq-$idx"), timeout = Duration.ZERO) }
+
+        val drainTransport = ScriptedTransport(*Array(5) { ok })
+        assertTrue(forwarder(drainTransport).retryPending())
+
+        val bodies = drainTransport.requests.map { Json.parseToJsonElement(it.second).jsonObject.getValue("body").jsonPrimitive.content }
+        assertEquals(5, bodies.size)
+        for (idx in 0 until 5) assertTrue(bodies[idx].contains("seq-$idx"))
     }
 
     @Test
@@ -241,7 +277,7 @@ class ForwarderTest {
         stateBacking.updateData { it.copy(callLogWatermark = 41) }
         val asked = mutableListOf<Long?>()
         val sync = MissedCallSync(
-            { after -> asked += after; CallLogSnapshot(43, listOf(LoggedMissedCall(42, call()), LoggedMissedCall(43, call()))) },
+            { after -> asked += after; CallLogSnapshot(43, listOf(LoggedMissedCall(42, call(receivedAt = 2_000L)), LoggedMissedCall(43, call(receivedAt = 3_000L)))) },
             stateStore,
             forwarder(ScriptedTransport(ok, ok)),
         )
@@ -254,35 +290,36 @@ class ForwarderTest {
     }
 
     @Test
-    fun `interrupted sync does not resend calls that were already forwarded`() = runTest {
+    fun `interrupted sync persists calls to outbox before draining without losing or duplicating`() = runTest {
         stateBacking.updateData { it.copy(callLogWatermark = 41) }
-        val log = listOf(LoggedMissedCall(42, call()), LoggedMissedCall(43, call()))
+        val log = listOf(LoggedMissedCall(42, call(receivedAt = 2_000L)), LoggedMissedCall(43, call(receivedAt = 3_000L)))
         val transport = object : HttpTransport {
             var posts = 0
-            override suspend fun postJson(url: String, body: String): HttpResult {
+            override suspend fun postJson(url: String, body: String, timeoutMs: Long): HttpResult {
                 posts++
                 if (posts == 2) throw kotlinx.coroutines.CancellationException("job stopped")
                 return ok
             }
         }
+        val fwd = forwarder(transport)
         val sync = MissedCallSync(
             { after -> CallLogSnapshot(43, log.filter { it.id > (after ?: 0) }) },
             stateStore,
-            forwarder(transport),
+            fwd,
         )
 
         runCatching { sync.sync() }
-        val interrupted = stateBacking.value.callLogWatermark
-        sync.sync()
-
-        assertEquals(3, transport.posts)
-        assertEquals(42L, interrupted)
-        assertEquals(2, stats.missedCalls)
         assertEquals(43L, stateBacking.value.callLogWatermark)
+        assertEquals(1, outbox.items.size)
+
+        assertTrue(fwd.retryPending())
+        assertEquals(3, transport.posts)
+        assertEquals(2, stats.missedCalls)
+        assertTrue(outbox.items.isEmpty())
     }
 
     @Test
-    fun `retry holds queued messages while forwarding is paused and sends them after resume`() = runTest {
+    fun `retryPending holds queued messages while forwarding is paused and sends them after resume`() = runTest {
         val transport = ScriptedTransport(HttpResult.Failure, HttpResult.Failure, ok, ok)
         val forwarder = forwarder(transport)
         forwarder.forward(sms())
@@ -293,22 +330,22 @@ class ForwarderTest {
         settingsBacking.updateData { configured.withChannel(EventKind.Sms, false) }
         assertTrue(forwarder.retryPending())
 
-        assertEquals(listOf(EventKind.Sms), stateBacking.value.pending.map { it.kind })
+        assertEquals(listOf(EventKind.Sms), outbox.items.map { it.kind })
         assertEquals(3, transport.requests.size)
         settingsBacking.updateData { configured }
         assertTrue(forwarder.retryPending())
-        assertTrue(stateBacking.value.pending.isEmpty())
+        assertTrue(outbox.items.isEmpty())
         assertEquals(2, stats.delivered)
     }
 
     @Test
-    fun `pausing forwarding during a retry keeps the remaining messages queued`() = runTest {
+    fun `pausing forwarding during a retry pass keeps the remaining messages queued`() = runTest {
         val failing = ScriptedTransport(HttpResult.Failure, HttpResult.Failure)
         forwarder(failing).forward(sms())
         forwarder(failing).forward(call())
         val transport = object : HttpTransport {
             var posts = 0
-            override suspend fun postJson(url: String, body: String): HttpResult {
+            override suspend fun postJson(url: String, body: String, timeoutMs: Long): HttpResult {
                 posts++
                 settingsBacking.updateData { it.copy(forwardingEnabled = false) }
                 return ok
@@ -318,11 +355,11 @@ class ForwarderTest {
         assertTrue(forwarder(transport).retryPending())
 
         assertEquals(1, transport.posts)
-        assertEquals(listOf(EventKind.MissedCall), stateBacking.value.pending.map { it.kind })
+        assertEquals(listOf(EventKind.MissedCall), outbox.items.map { it.kind })
     }
 
     @Test
-    fun `retry does not run for a boot that was never activated`() = runTest {
+    fun `retryPending does not run for a boot that was never activated`() = runTest {
         val transport = ScriptedTransport(HttpResult.Failure)
         val forwarder = forwarder(transport)
         forwarder.forward(sms())
@@ -330,31 +367,8 @@ class ForwarderTest {
 
         assertTrue(forwarder.retryPending())
 
-        assertEquals(1, stateBacking.value.pending.size)
+        assertEquals(1, outbox.items.size)
         assertEquals(1, transport.requests.size)
-    }
-
-    @Test
-    fun `every persisted state has counted exactly the calls below its watermark`() = runTest {
-        stateBacking.updateData { it.copy(callLogWatermark = 41) }
-        val log = listOf(LoggedMissedCall(42, call()), LoggedMissedCall(43, call()))
-        val sync = MissedCallSync({ CallLogSnapshot(43, log) }, stateStore, forwarder(ScriptedTransport(ok, badKey)))
-
-        sync.sync()
-
-        val settled = stateBacking.history.map { Triple(it.callLogWatermark, it.stats.missedCalls, it.stats.failed) }.distinct()
-        assertEquals(listOf(Triple(null, 0L, 0L), Triple(41L, 0L, 0L), Triple(42L, 1L, 0L), Triple(43L, 1L, 1L)), settled)
-    }
-
-    @Test
-    fun `every persisted state holds a retried message either in the queue or in the stats`() = runTest {
-        val forwarder = forwarder(ScriptedTransport(HttpResult.Failure, ok))
-        forwarder.forward(sms())
-
-        forwarder.retryPending()
-
-        val settled = stateBacking.history.map { it.pending.size to it.stats.delivered }.distinct()
-        assertEquals(listOf(0 to 0L, 1 to 0L, 0 to 1L), settled)
     }
 
     @Test
@@ -377,21 +391,20 @@ class ForwarderTest {
     }
 
     @Test
-    fun `pending queue deduplicates identical events and caps at max size`() = runTest {
+    fun `outbox deduplicates identical events and caps at max size`() = runTest {
         val total = Forwarder.MAX_PENDING + 10
-        val transport = ScriptedTransport(*Array(total + 1) { HttpResult.Failure })
-        val forwarder = forwarder(transport)
+        val forwarder = forwarder(ScriptedTransport())
 
-        forwarder.forward(sms(receivedAt = 1_000L))
-        forwarder.forward(sms(receivedAt = 1_000L))
-        assertEquals(1, stateBacking.value.pending.size)
+        forwarder.forward(sms(receivedAt = 1_000L), timeout = Duration.ZERO)
+        forwarder.forward(sms(receivedAt = 1_000L), timeout = Duration.ZERO)
+        assertEquals(1, outbox.items.size)
 
         for (i in 1 until total) {
-            forwarder.forward(sms(receivedAt = 1_000L + i).copy(content = "msg-$i"))
+            forwarder.forward(sms(receivedAt = 1_000L + i).copy(content = "msg-$i"), timeout = Duration.ZERO)
         }
 
-        assertEquals(Forwarder.MAX_PENDING, stateBacking.value.pending.size)
-        assertTrue(stateBacking.value.pending.last().body.contains("msg-${total - 1}"))
+        assertEquals(Forwarder.MAX_PENDING, outbox.items.size)
+        assertTrue(outbox.items.last().body.contains("msg-${total - 1}"))
     }
 
     @Test
@@ -401,6 +414,7 @@ class ForwarderTest {
         val forwarder = Forwarder(
             settingsStore = settingsStore,
             stateStore = stateStore,
+            outbox = outbox,
             bark = BarkClient(ScriptedTransport(ok)),
             bootCount = { 7 },
             now = { clock },
@@ -425,7 +439,7 @@ class ForwarderTest {
         forwarder(transport).forward(sms(), timeout = Duration.ZERO)
 
         assertTrue(transport.requests.isEmpty())
-        assertEquals(1, stateBacking.value.pending.size)
+        assertEquals(1, outbox.items.size)
         assertEquals(1, retriesScheduled)
     }
 
@@ -458,34 +472,100 @@ class ForwarderTest {
     }
 
     @Test
-    fun `retryPending drains messages enqueued during an active retry pass`() = runTest {
-        val failing = ScriptedTransport(HttpResult.Failure)
-        val initial = forwarder(failing)
-        initial.forward(sms(receivedAt = 1_000L))
+    fun `retryPending processes messages enqueued during an active pass`() = runTest {
+        forwarder(ScriptedTransport()).forward(sms(receivedAt = 1_000L), timeout = Duration.ZERO)
 
         var injected = false
-        lateinit var retryForwarder: Forwarder
         val transport = object : HttpTransport {
             var posts = 0
-            override suspend fun postJson(url: String, body: String): HttpResult {
+            override suspend fun postJson(url: String, body: String, timeoutMs: Long): HttpResult {
                 posts++
                 if (!injected) {
                     injected = true
-                    stateBacking.updateData {
-                        it.copy(
-                            pending = it.pending + sms(receivedAt = 2_000L).copy(content = "late")
-                                .toMessage(TemplateChoice.Default, ZoneOffset.UTC, Language.Zh, it.deliverySecret!!),
-                        )
-                    }
+                    outbox.enqueue(
+                        listOf(
+                            sms(receivedAt = 2_000L).copy(content = "late")
+                                .toMessage(TemplateChoice.Default, ZoneOffset.UTC, Language.Zh, stateBacking.value.deliverySecret!!),
+                        ),
+                        Forwarder.MAX_PENDING,
+                    )
                 }
                 return ok
             }
         }
-        retryForwarder = forwarder(transport)
 
-        assertTrue(retryForwarder.retryPending())
+        assertTrue(forwarder(transport).retryPending())
         assertEquals(2, transport.posts)
-        assertTrue(stateBacking.value.pending.isEmpty())
+        assertTrue(outbox.items.isEmpty())
         assertEquals(2L, stats.delivered)
+    }
+
+    @Test
+    fun `live forward automatically drains previously queued backlog in one pass`() = runTest {
+        forwarder(ScriptedTransport()).forward(sms(receivedAt = 1_000L).copy(content = "old"), timeout = Duration.ZERO)
+
+        val transport = ScriptedTransport(ok, ok)
+        forwarder(transport).forward(sms(receivedAt = 2_000L).copy(content = "new"))
+
+        assertEquals(2, transport.requests.size)
+        assertTrue(outbox.items.isEmpty())
+        assertEquals(2L, stats.delivered)
+        assertEquals(1L, stats.latencySamples)
+    }
+
+    @Test
+    fun `a single poison 500 message is skipped in pass without blocking subsequent healthy messages`() = runTest {
+        val enqueuer = forwarder(ScriptedTransport())
+        enqueuer.forward(sms(receivedAt = 1_000L).copy(content = "poison"), timeout = Duration.ZERO)
+        enqueuer.forward(sms(receivedAt = 2_000L).copy(content = "healthy"), timeout = Duration.ZERO)
+
+        val transport = object : HttpTransport {
+            override suspend fun postJson(url: String, body: String, timeoutMs: Long): HttpResult =
+                if ("poison" in body) HttpResult.Response(500, """{"code":500,"message":"internal"}""") else ok
+        }
+        assertFalse(forwarder(transport).retryPending())
+
+        assertEquals(1L, stats.delivered)
+        assertEquals(1, outbox.items.size)
+        assertTrue(outbox.items.single().body.contains("poison"))
+    }
+
+    @Test
+    fun `consecutive 500 server failures abort pass for native backoff`() = runTest {
+        val enqueuer = forwarder(ScriptedTransport())
+        repeat(3) { i -> enqueuer.forward(sms(receivedAt = 1_000L + i).copy(content = "m-$i"), timeout = Duration.ZERO) }
+
+        var posts = 0
+        val transport = object : HttpTransport {
+            override suspend fun postJson(url: String, body: String, timeoutMs: Long): HttpResult {
+                posts++
+                return HttpResult.Response(500, """{"code":500}""")
+            }
+        }
+
+        assertFalse(forwarder(transport).retryPending())
+        assertEquals(2, posts)
+        assertEquals(3, outbox.items.size)
+    }
+
+    @Test
+    fun `offline precheck enqueues immediately without invoking network`() = runTest {
+        networkAvailable = false
+        val transport = ScriptedTransport(ok)
+
+        forwarder(transport).forward(sms())
+
+        assertTrue(transport.requests.isEmpty())
+        assertEquals(1, outbox.items.size)
+        assertEquals(1, retriesScheduled)
+    }
+
+    @Test
+    fun `forward propagates timeout budget directly to transport`() = runTest {
+        val transport = ScriptedTransport(ok)
+
+        forwarder(transport).forward(sms(), timeout = Forwarder.SMS_DIRECT_TIMEOUT)
+
+        assertEquals(listOf(5_000L), transport.timeouts)
     }
 }

@@ -12,6 +12,8 @@ import android.content.Intent
 import android.content.pm.ServiceInfo
 import android.content.res.Configuration
 import android.database.ContentObserver
+import android.net.ConnectivityManager
+import android.net.Network
 import android.os.Handler
 import android.os.IBinder
 import android.os.Looper
@@ -26,6 +28,9 @@ import kotlinx.coroutines.launch
 class KeepAliveService : Service() {
     private var callLogObserver: ContentObserver? = null
     private var pendingSync: Job? = null
+    private var networkCallback: ConnectivityManager.NetworkCallback? = null
+    @Volatile
+    private var lastNetwork: Network? = null
 
     override fun onBind(intent: Intent?): IBinder? = null
 
@@ -36,6 +41,7 @@ class KeepAliveService : Service() {
                 setShowBadge(false)
             },
         )
+        registerNetworkCallback()
     }
 
     override fun onConfigurationChanged(newConfig: Configuration) {
@@ -69,10 +75,44 @@ class KeepAliveService : Service() {
     }
 
     override fun onDestroy() {
+        unregisterNetworkCallback()
         clearCallLogObserver()
         active = false
         watchingCallLog = false
         super.onDestroy()
+    }
+
+    private fun registerNetworkCallback() {
+        if (networkCallback != null) return
+        val connectivity = getSystemService(ConnectivityManager::class.java) ?: return
+        lastNetwork = connectivity.activeNetwork
+        val callback = object : ConnectivityManager.NetworkCallback() {
+            override fun onAvailable(network: Network) {
+                val previous = lastNetwork
+                lastNetwork = network
+                if (previous != network) {
+                    appContainer.scope.launch { appContainer.forwarder.onNetworkAvailable() }
+                }
+            }
+
+            override fun onLost(network: Network) {
+                if (lastNetwork == network) lastNetwork = null
+            }
+        }
+        try {
+            connectivity.registerDefaultNetworkCallback(callback)
+            networkCallback = callback
+        } catch (_: SecurityException) {
+        }
+    }
+
+    private fun unregisterNetworkCallback() {
+        val callback = networkCallback ?: return
+        networkCallback = null
+        try {
+            getSystemService(ConnectivityManager::class.java)?.unregisterNetworkCallback(callback)
+        } catch (_: IllegalArgumentException) {
+        }
     }
 
     private fun syncCallLogObserver(watch: Boolean) {

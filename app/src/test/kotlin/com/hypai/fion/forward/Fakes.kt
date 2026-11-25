@@ -3,6 +3,8 @@ package com.hypai.fion.forward
 import androidx.datastore.core.DataStore
 import com.hypai.fion.bark.HttpResult
 import com.hypai.fion.bark.HttpTransport
+import com.hypai.fion.store.Message
+import com.hypai.fion.store.Outbox
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 
@@ -19,12 +21,43 @@ class MemoryStore<T>(initial: T) : DataStore<T> {
     }
 }
 
+class MemoryOutbox : Outbox {
+    val items = mutableListOf<Message>()
+
+    override suspend fun enqueue(messages: List<Message>, maxSize: Int) {
+        for (message in messages) {
+            if (items.none { it.id == message.id }) items += message
+        }
+        if (items.size > maxSize) {
+            repeat(items.size - maxSize) { items.removeAt(0) }
+        }
+    }
+
+    override suspend fun purgeExpired(cutoffMs: Long): Int {
+        val before = items.size
+        items.removeAll { it.receivedAtMs < cutoffMs }
+        return before - items.size
+    }
+
+    override suspend fun list(kinds: Set<EventKind>): List<Message> =
+        items.filter { it.kind in kinds }
+
+    override suspend fun remove(id: String) {
+        items.removeAll { it.id == id }
+    }
+
+    override suspend fun hasAny(kinds: Set<EventKind>): Boolean =
+        items.any { it.kind in kinds }
+}
+
 class ScriptedTransport(vararg results: HttpResult) : HttpTransport {
     private val remaining = ArrayDeque(results.toList())
     val requests = mutableListOf<Pair<String, String>>()
+    val timeouts = mutableListOf<Long>()
 
-    override suspend fun postJson(url: String, body: String): HttpResult {
+    override suspend fun postJson(url: String, body: String, timeoutMs: Long): HttpResult {
         requests += url to body
+        timeouts += timeoutMs
         return remaining.removeFirst()
     }
 }

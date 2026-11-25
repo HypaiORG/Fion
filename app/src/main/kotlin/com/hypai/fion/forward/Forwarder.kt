@@ -6,6 +6,7 @@ import com.hypai.fion.bark.endpoint
 import com.hypai.fion.store.ForwardState
 import com.hypai.fion.store.ForwardStateStore
 import com.hypai.fion.store.Message
+import com.hypai.fion.store.Outbox
 import com.hypai.fion.store.Settings
 import com.hypai.fion.store.SettingsStore
 import com.hypai.fion.store.TemplateChoice
@@ -25,6 +26,7 @@ import kotlinx.coroutines.withTimeoutOrNull
 class Forwarder(
     private val settingsStore: SettingsStore,
     private val stateStore: ForwardStateStore,
+    private val outbox: Outbox,
     private val bark: BarkClient,
     private val bootCount: () -> Int,
     private val now: () -> Long,
@@ -34,8 +36,9 @@ class Forwarder(
     private val scheduleRetry: () -> Unit,
     private val cancelRetry: () -> Unit = {},
     private val newSecret: () -> String,
+    private val isNetworkAvailable: () -> Boolean = { true },
 ) {
-    private val retryLock = Mutex()
+    private val drainLock = Mutex()
     private val currentBootCount: Int by lazy(bootCount)
 
     suspend fun activate() {
@@ -47,75 +50,122 @@ class Forwarder(
     fun isActive(settings: Settings, state: ForwardState): Boolean =
         settings.forwarding && state.activatedBootCount == currentBootCount
 
-    private fun route(settings: Settings, state: ForwardState, kind: EventKind): BarkEndpoint? =
-        settings.bark.endpoint()?.takeIf { isActive(settings, state) && settings.forwards(kind) }
+    fun enabledKinds(settings: Settings, state: ForwardState): Set<EventKind> =
+        if (isActive(settings, state) && settings.bark.endpoint() != null) settings.channels else emptySet()
 
-    fun accepts(settings: Settings, state: ForwardState, kind: EventKind): Boolean = route(settings, state, kind) != null
+    fun accepts(settings: Settings, state: ForwardState, kind: EventKind): Boolean =
+        kind in enabledKinds(settings, state)
 
     suspend fun forward(
         event: ForwardEvent,
         timeout: Duration = PUSH_TIMEOUT,
         receivedElapsedMs: Long? = null,
         progress: ((ForwardState) -> ForwardState)? = null,
+    ) = forwardAll(listOf(event), timeout, receivedElapsedMs, progress)
+
+    suspend fun forwardAll(
+        events: List<ForwardEvent>,
+        timeout: Duration = PUSH_TIMEOUT,
+        receivedElapsedMs: Long? = null,
+        progress: ((ForwardState) -> ForwardState)? = null,
     ) {
         val current = settingsStore.snapshot()
         val state = stateStore.snapshot()
-        val endpoint = route(current, state, event.kind) ?: run {
+        val allowed = enabledKinds(current, state)
+        val routable = events.filter { it.kind in allowed }
+        if (routable.isEmpty()) {
             if (progress != null) stateStore.settle(progress)
             return
         }
-        val message = event.toMessage(current.push(event.kind).template, zone(), language(), state.deliverySecret ?: createDeliverySecret())
-        val delivery = if (timeout > Duration.ZERO) push(endpoint, current, message, timeout) else Delivery.Unreachable
-        val applyProgress = progress ?: { it }
-        when (delivery) {
-            Delivery.Delivered -> {
-                val latency = if (receivedElapsedMs != null) {
-                    (elapsedMs() - receivedElapsedMs).coerceAtLeast(0L)
-                } else {
-                    (now() - message.receivedAtMs).coerceAtLeast(0L)
-                }
-                stateStore.settle { applyProgress(it).copy(stats = it.stats.withDelivered(message, latency)) }
-            }
-            is Delivery.Rejected -> stateStore.settle { applyProgress(it).copy(stats = it.stats.withFailed()) }
-            Delivery.Unreachable -> {
-                stateStore.settle { applyProgress(it).copy(pending = it.pending.enqueue(message)) }
-                scheduleRetry()
-            }
+        val secret = state.deliverySecret ?: createDeliverySecret()
+        val currentZone = zone()
+        val currentLanguage = language()
+        val messages = routable.map { it.toMessage(current.push(it.kind).template, currentZone, currentLanguage, secret) }
+        outbox.enqueue(messages, MAX_PENDING)
+        if (progress != null) stateStore.settle(progress)
+
+        if (timeout <= Duration.ZERO || !isNetworkAvailable()) {
+            scheduleRetry()
+            return
+        }
+        if (!drain(timeout, messages.mapTo(HashSet(messages.size)) { it.id }, receivedElapsedMs)) {
+            scheduleRetry()
         }
     }
 
-    suspend fun retryPending(): Boolean = retryLock.withLock {
-        do {
-            val snapshot = stateStore.snapshot().pending
-            if (snapshot.isEmpty()) {
-                cancelRetry()
-                return@withLock true
-            }
-            var progressed = false
-            for (queued in snapshot) {
+    suspend fun retryPending(): Boolean = drain()
+
+    suspend fun onNetworkAvailable() {
+        if (outbox.hasAny() && !drain()) scheduleRetry()
+    }
+
+    private suspend fun drain(
+        budget: Duration? = null,
+        liveIds: Set<String> = emptySet(),
+        receivedElapsedMs: Long? = null,
+    ): Boolean = drainLock.withLock {
+        val deadlineMs = budget?.let { elapsedMs() + it.inWholeMilliseconds }
+        val expired = outbox.purgeExpired(now() - PENDING_EXPIRY.inWholeMilliseconds)
+        if (expired > 0) stateStore.settle { it.copy(stats = it.stats.withFailed(expired)) }
+
+        val attemptedIds = HashSet<String>()
+        var consecutiveServerErrors = 0
+        var aborted = false
+
+        loop@ while (true) {
+            val kinds = enabledKinds(settingsStore.snapshot(), stateStore.snapshot())
+            if (kinds.isEmpty()) break
+            val snapshot = outbox.list(kinds).filterNot { it.id in attemptedIds }
+            if (snapshot.isEmpty()) break
+
+            for (message in snapshot) {
                 val current = settingsStore.snapshot()
-                val delivery = when {
-                    now() - queued.receivedAtMs > PENDING_EXPIRY.inWholeMilliseconds -> Delivery.Rejected("expired")
-                    else -> push(route(current, stateStore.snapshot(), queued.kind) ?: continue, current, queued, PUSH_TIMEOUT)
+                val state = stateStore.snapshot()
+                val endpoint = current.bark.endpoint()
+                    ?.takeIf { isActive(current, state) && current.forwards(message.kind) }
+                    ?: continue
+
+                val reqTimeoutMs = deadlineMs?.let { (it - elapsedMs()).coerceAtMost(PUSH_TIMEOUT.inWholeMilliseconds) }
+                    ?: PUSH_TIMEOUT.inWholeMilliseconds
+                if (reqTimeoutMs < MIN_REQUEST_TIMEOUT_MS || !isNetworkAvailable()) {
+                    aborted = true
+                    break@loop
                 }
-                when (delivery) {
-                    Delivery.Unreachable -> return@withLock false
+
+                attemptedIds += message.id
+                when (val delivery = push(endpoint, current, message, reqTimeoutMs)) {
                     Delivery.Delivered -> {
-                        progressed = true
-                        stateStore.settle {
-                            it.copy(pending = it.pending.removeById(queued.id), stats = it.stats.withDelivered(queued, firstAttemptLatencyMs = null))
+                        consecutiveServerErrors = 0
+                        val latency = if (message.id in liveIds) {
+                            if (receivedElapsedMs != null) (elapsedMs() - receivedElapsedMs).coerceAtLeast(0L)
+                            else (now() - message.receivedAtMs).coerceAtLeast(0L)
+                        } else {
+                            null
                         }
+                        outbox.remove(message.id)
+                        stateStore.settle { it.copy(stats = it.stats.withDelivered(message, latency)) }
                     }
                     is Delivery.Rejected -> {
-                        progressed = true
-                        stateStore.settle {
-                            it.copy(pending = it.pending.removeById(queued.id), stats = it.stats.withFailed())
+                        consecutiveServerErrors = 0
+                        outbox.remove(message.id)
+                        stateStore.settle { it.copy(stats = it.stats.withFailed()) }
+                    }
+                    is Delivery.Unreachable -> {
+                        if (delivery.serverError && ++consecutiveServerErrors < MAX_CONSECUTIVE_SERVER_ERRORS) {
+                            continue
                         }
+                        aborted = true
+                        break@loop
                     }
                 }
             }
-        } while (progressed)
-        true
+        }
+
+        if (!outbox.hasAny()) {
+            cancelRetry()
+            return@withLock true
+        }
+        !aborted && !outbox.hasAny(enabledKinds(settingsStore.snapshot(), stateStore.snapshot()))
     }
 
     private suspend fun createDeliverySecret(): String {
@@ -125,21 +175,20 @@ class Forwarder(
         return stored.deliverySecret ?: created
     }
 
-    private suspend fun push(endpoint: BarkEndpoint, settings: Settings, message: Message, timeout: Duration): Delivery =
-        withTimeoutOrNull(timeout) { bark.push(endpoint, settings.push(message.kind), language(), message) } ?: Delivery.Unreachable
+    private suspend fun push(endpoint: BarkEndpoint, settings: Settings, message: Message, timeoutMs: Long): Delivery =
+        withTimeoutOrNull(timeoutMs) {
+            bark.push(endpoint, settings.push(message.kind), language(), message, timeoutMs)
+        } ?: Delivery.Unreachable()
 
     companion object {
         val PUSH_TIMEOUT = 8.seconds
         val SMS_DIRECT_TIMEOUT = 5.seconds
         val PENDING_EXPIRY = 24.hours
         const val MAX_PENDING = 200
+        private const val MAX_CONSECUTIVE_SERVER_ERRORS = 2
+        private const val MIN_REQUEST_TIMEOUT_MS = 1_000L
     }
 }
-
-private fun List<Message>.enqueue(message: Message): List<Message> =
-    if (any { it.id == message.id }) this else (this + message).takeLast(Forwarder.MAX_PENDING)
-
-private fun List<Message>.removeById(id: String): List<Message> = filterNot { it.id == id }
 
 private fun ForwardEvent.deliveryId(secret: String): String {
     val mac = Mac.getInstance("HmacSHA256").apply { init(SecretKeySpec(secret.toByteArray(), "HmacSHA256")) }

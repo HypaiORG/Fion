@@ -6,6 +6,7 @@ import com.hypai.fion.forward.Forwarder
 import com.hypai.fion.forward.MissedCallSync
 import com.hypai.fion.store.ForwardState
 import com.hypai.fion.store.ForwardStateStore
+import com.hypai.fion.store.Outbox
 import com.hypai.fion.store.Settings
 import com.hypai.fion.store.SettingsStore
 
@@ -21,6 +22,7 @@ interface SystemScheduler {
 class RuntimeCoordinator(
     private val settingsStore: SettingsStore,
     private val stateStore: ForwardStateStore,
+    private val outbox: Outbox,
     private val forwarder: Forwarder,
     private val missedCalls: MissedCallSync,
     private val notificationsEnabled: () -> Boolean,
@@ -92,8 +94,8 @@ class RuntimeCoordinator(
         scheduler.reconcileKeepAlive(active = keepAlive, watchCallLog = watchCallLog)
         if (watchCallLog) scheduler.ensureCallLogWatch() else scheduler.cancelCallLogWatch()
         when {
-            state.pending.isEmpty() -> scheduler.cancelRetry()
-            state.pending.any { forwarder.accepts(settings, state, it.kind) } -> scheduler.scheduleRetry(replace = replaceRetry)
+            !outbox.hasAny() -> scheduler.cancelRetry()
+            outbox.hasAny(forwarder.enabledKinds(settings, state)) -> scheduler.scheduleRetry(replace = replaceRetry)
         }
     }
 }

@@ -68,5 +68,5 @@ val ForwardEvent.messageBody: String
 sealed interface Delivery {
     data object Delivered : Delivery
     data class Rejected(val reason: String) : Delivery
-    data object Unreachable : Delivery
+    data class Unreachable(val serverError: Boolean = false) : Delivery
 }

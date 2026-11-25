@@ -151,10 +151,14 @@ class BarkProtocolTest {
         assertEquals(Delivery.Delivered, parseDelivery(ok))
         assertEquals(Delivery.Rejected("failed to get device token"), parseDelivery(badKey))
         assertEquals(Delivery.Rejected("HTTP 404"), parseDelivery(HttpResult.Response(404, "not found")))
-        assertEquals(Delivery.Rejected("HTTP 200"), parseDelivery(HttpResult.Response(200, "<html>portal</html>")))
-        assertEquals(Delivery.Unreachable, parseDelivery(HttpResult.Response(500, """{"code":500,"message":"push failed"}""")))
-        assertEquals(Delivery.Unreachable, parseDelivery(HttpResult.Response(429, "")))
-        assertEquals(Delivery.Unreachable, parseDelivery(HttpResult.Failure))
+        assertEquals(Delivery.Rejected("invalid key"), parseDelivery(HttpResult.Response(200, """{"code":400,"message":"invalid key"}""")))
+        assertEquals(Delivery.Unreachable(), parseDelivery(HttpResult.Response(200, "<html>portal</html>")))
+        assertEquals(Delivery.Unreachable(), parseDelivery(HttpResult.Response(302, "")))
+        assertEquals(Delivery.Unreachable(serverError = true), parseDelivery(HttpResult.Response(500, """{"code":500,"message":"push failed"}""")))
+        assertEquals(Delivery.Unreachable(serverError = true), parseDelivery(HttpResult.Response(200, """{"code":500,"message":"push failed"}""")))
+        assertEquals(Delivery.Unreachable(), parseDelivery(HttpResult.Response(429, "")))
+        assertEquals(Delivery.Unreachable(), parseDelivery(HttpResult.Response(503, "")))
+        assertEquals(Delivery.Unreachable(), parseDelivery(HttpResult.Failure))
     }
 
     @Test
