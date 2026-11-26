@@ -18,19 +18,21 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import com.hypai.fion.R
 import com.hypai.fion.android.Readiness
+import com.hypai.fion.android.manifestName
 import com.hypai.fion.android.openAppDetails
-import com.hypai.fion.android.permissions
-import com.hypai.fion.appContainer
+import com.hypai.fion.forward.AppPermission
 import com.hypai.fion.forward.EventKind
 import com.hypai.fion.forward.PermissionGroup
 import com.hypai.fion.forward.TemplateVariable
 import com.hypai.fion.forward.permission
+import com.hypai.fion.forward.requirements
 import com.hypai.fion.ui.currentLanguage
 import com.hypai.fion.ui.design.ActionRow
 import com.hypai.fion.ui.design.AppSheet
@@ -41,6 +43,8 @@ import com.hypai.fion.ui.design.Palette
 
 private const val DIALOG_SKIPPED_MS = 350L
 
+val LocalRefreshReadiness = staticCompositionLocalOf<() -> Unit> { {} }
+
 enum class PermissionOutcome { Granted, Denied, Blocked }
 
 private tailrec fun Context.findActivity(): Activity? = when (this) {
@@ -50,34 +54,43 @@ private tailrec fun Context.findActivity(): Activity? = when (this) {
 }
 
 @Composable
-fun rememberPermissionRequest(onResult: (PermissionOutcome) -> Unit): (PermissionGroup) -> Unit {
+internal fun rememberPermissionsRequest(onResult: (PermissionOutcome) -> Unit): (List<AppPermission>) -> Unit {
     val context = LocalContext.current
     val activity = remember(context) { context.findActivity() }
+    val refreshReadiness = LocalRefreshReadiness.current
+    val latestRefresh by rememberUpdatedState(refreshReadiness)
+    val latestOnResult by rememberUpdatedState(onResult)
     var requestedAt by rememberSaveable { mutableLongStateOf(0L) }
     var hadRationale by rememberSaveable { mutableStateOf(false) }
-    var lastGroup by rememberSaveable { mutableStateOf<PermissionGroup?>(null) }
+    var lastRequested by rememberSaveable { mutableStateOf<List<String>>(emptyList()) }
     val launcher = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { result ->
-        context.appContainer.coordinator.refreshReadiness()
-        val group = lastGroup
+        latestRefresh()
         val outcome = when {
             result.isEmpty() -> PermissionOutcome.Denied
             result.values.all { it } -> PermissionOutcome.Granted
             else -> {
-                val showRationaleNow = activity != null && group != null &&
-                    group.permissions.any { activity.shouldShowRequestPermissionRationale(it) }
+                val showRationaleNow = activity != null &&
+                    lastRequested.any { activity.shouldShowRequestPermissionRationale(it) }
                 val elapsed = SystemClock.elapsedRealtime() - requestedAt
                 if (!hadRationale && !showRationaleNow && elapsed < DIALOG_SKIPPED_MS) PermissionOutcome.Blocked
                 else PermissionOutcome.Denied
             }
         }
-        onResult(outcome)
+        latestOnResult(outcome)
     }
-    return { group ->
-        lastGroup = group
-        hadRationale = activity != null && group.permissions.any { activity.shouldShowRequestPermissionRationale(it) }
+    return { permissions ->
+        val names = permissions.map(AppPermission::manifestName)
+        lastRequested = names
+        hadRationale = activity != null && names.any { activity.shouldShowRequestPermissionRationale(it) }
         requestedAt = SystemClock.elapsedRealtime()
-        launcher.launch(group.permissions)
+        launcher.launch(names.toTypedArray())
     }
+}
+
+@Composable
+fun rememberPermissionRequest(onResult: (PermissionOutcome) -> Unit): (PermissionGroup) -> Unit {
+    val request = rememberPermissionsRequest(onResult)
+    return { group -> request(group.requirements) }
 }
 
 class PermissionLook(
@@ -106,14 +119,14 @@ private val SheetRowPadding = PaddingValues(start = 20.dp, end = 24.dp, top = 8.
 @Composable
 fun PermissionSheet(prompt: PermissionPrompt, readiness: Readiness, onDismiss: () -> Unit) {
     val context = LocalContext.current
-    val request = rememberPermissionRequest { if (it == PermissionOutcome.Blocked) context.openAppDetails() }
-    val groups: List<PermissionGroup>
+    val request = rememberPermissionsRequest { if (it == PermissionOutcome.Blocked) context.openAppDetails() }
+    val items: List<Pair<PermissionGroup, List<AppPermission>>>
     val title: String
     val subtitle: String
     val onStart: (() -> Unit)?
     when (prompt) {
         is PermissionPrompt.Forwarding -> {
-            groups = prompt.kinds.map(EventKind::permission)
+            items = prompt.kinds.map { it.permission to it.permission.requirements }
             val (titleRes, subtitleRes) = when (prompt.kinds.singleOrNull()) {
                 null -> R.string.perm_sheet_title to R.string.service_text
                 EventKind.Sms -> R.string.perm_sheet_sms_title to R.string.forward_sms_on
@@ -124,31 +137,31 @@ fun PermissionSheet(prompt: PermissionPrompt, readiness: Readiness, onDismiss: (
             onStart = prompt.onStart
         }
         is PermissionPrompt.Variable -> {
-            groups = listOf(prompt.variable.permission)
+            items = listOf(prompt.variable.permission to listOf(prompt.variable.requirement))
             title = stringResource(R.string.perm_sheet_var_title, prompt.variable.displayName(currentLanguage()))
             subtitle = stringResource(R.string.perm_sheet_var_subtitle)
             onStart = null
         }
     }
 
-    val anyGranted = groups.any(readiness::allows)
-    val allGranted = groups.all(readiness::allows)
+    val anyGranted = items.any { (_, perms) -> perms.all(readiness::allows) }
+    val allGranted = items.all { (_, perms) -> perms.all(readiness::allows) }
     val latestStart by rememberUpdatedState(onStart)
     val latestDismiss by rememberUpdatedState(onDismiss)
     LaunchedEffect(anyGranted) { if (anyGranted) latestStart?.invoke() }
     LaunchedEffect(allGranted) { if (allGranted) latestDismiss() }
 
     AppSheet(title = title, subtitle = subtitle, onDismiss = onDismiss) {
-        groups.forEach { group ->
+        items.forEach { (group, perms) ->
             val look = group.look
             ActionRow(
                 badge = look.badge,
                 title = stringResource(look.title),
                 subtitle = stringResource(look.summary),
                 action = stringResource(R.string.keep_grant),
-                onAction = { request(group) },
+                onAction = { request(perms) },
                 contentPadding = SheetRowPadding,
-                ready = readiness.allows(group),
+                ready = perms.all(readiness::allows),
             )
         }
         InfoNote(stringResource(R.string.perm_sheet_note), Modifier.padding(start = 24.dp, end = 24.dp, top = 8.dp), Icons.Shield)

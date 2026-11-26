@@ -4,6 +4,7 @@ import com.hypai.fion.android.Readiness
 import com.hypai.fion.bark.BarkClient
 import com.hypai.fion.bark.BarkSettings
 import com.hypai.fion.bark.HttpResult
+import com.hypai.fion.forward.AppPermission
 import com.hypai.fion.forward.CallLogSnapshot
 import com.hypai.fion.forward.EventKind
 import com.hypai.fion.forward.ForwardEvent
@@ -64,8 +65,8 @@ private class RecordingScheduler : SystemScheduler {
 
 class RuntimeCoordinatorTest {
     private val configured = Settings(bark = BarkSettings(deviceKey = "k"))
-    private val allReady = Readiness(sms = true, callLog = true, phone = true, batteryUnrestricted = true, notifications = true)
-    private val noneReady = Readiness(sms = false, callLog = false, phone = false, batteryUnrestricted = false, notifications = false)
+    private val allReady = Readiness(granted = AppPermission.entries.toSet(), batteryUnrestricted = true)
+    private val noneReady = Readiness(granted = emptySet(), batteryUnrestricted = false)
 
     private data class Harness(
         val coordinator: RuntimeCoordinator,
@@ -103,7 +104,7 @@ class RuntimeCoordinatorTest {
             cancelRetry = { scheduler.cancelRetry() },
             newSecret = { "secret" },
         )
-        val missedCalls = MissedCallSync({ CallLogSnapshot(watermark, emptyList()) }, stateStore, forwarder)
+        val missedCalls = MissedCallSync({ _, _ -> CallLogSnapshot(watermark, emptyList()) }, stateStore, forwarder)
         val coordinator = RuntimeCoordinator(
             settingsStore = settingsStore,
             stateStore = stateStore,
@@ -187,7 +188,7 @@ class RuntimeCoordinatorTest {
         val smsOnly = configured.withChannel(EventKind.MissedCall, false)
         val env = harness(
             initialSettings = smsOnly,
-            initialReadiness = allReady.copy(sms = false, callLog = true),
+            initialReadiness = allReady.copy(granted = allReady.granted - AppPermission.ReceiveSms),
         )
 
         env.coordinator.reconcile()
@@ -199,7 +200,7 @@ class RuntimeCoordinatorTest {
 
     @Test
     fun `revoking call log permission keeps sms keep alive and cancels call log watch`() = runTest {
-        val env = harness(initialReadiness = allReady.copy(callLog = false))
+        val env = harness(initialReadiness = allReady.copy(granted = allReady.granted - AppPermission.ReadCallLog))
 
         env.coordinator.reconcile()
 
@@ -210,7 +211,7 @@ class RuntimeCoordinatorTest {
 
     @Test
     fun `restoring revoked permission resumes forwarding automatically without toggling settings`() = runTest {
-        val env = harness(initialReadiness = noneReady.copy(notifications = true))
+        val env = harness(initialReadiness = noneReady.copy(granted = setOf(AppPermission.Notifications)))
 
         env.coordinator.reconcile()
         assertEquals(listOf(false to false), env.scheduler.keepAliveCalls)
@@ -229,7 +230,7 @@ class RuntimeCoordinatorTest {
         val env = harness(initialReadiness = allReady)
         env.coordinator.reconcile()
 
-        env.setReadiness(allReady.copy(notifications = false))
+        env.setReadiness(allReady.copy(granted = allReady.granted - AppPermission.Notifications))
         env.coordinator.reconcile()
 
         assertEquals(listOf(true to true, false to true), env.scheduler.keepAliveCalls)
@@ -246,7 +247,7 @@ class RuntimeCoordinatorTest {
         assertEquals(listOf<Int?>(4), env.scheduler.callLogWatchJobIds)
         assertEquals(77L, env.state.value.callLogWatermark)
 
-        env.setReadiness(allReady.copy(sms = false, callLog = false))
+        env.setReadiness(allReady.copy(granted = allReady.granted - setOf(AppPermission.ReceiveSms, AppPermission.ReadCallLog)))
         env.coordinator.onCallLogTriggered(runningJobId = 1)
 
         assertEquals(1, env.scheduler.callLogCancels)
@@ -257,7 +258,7 @@ class RuntimeCoordinatorTest {
     fun `boot completed without forwarding permissions does not start keep alive or call log sync`() = runTest {
         val env = harness(
             initialState = ForwardState(activatedBootCount = null),
-            initialReadiness = noneReady.copy(notifications = true),
+            initialReadiness = noneReady.copy(granted = setOf(AppPermission.Notifications)),
         )
 
         env.coordinator.onBootCompleted()

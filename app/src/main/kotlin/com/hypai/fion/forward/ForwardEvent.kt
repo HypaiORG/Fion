@@ -8,15 +8,31 @@ enum class EventKind { Sms, MissedCall }
 
 enum class PermissionGroup { Sms, CallLog, Phone, Notifications }
 
-val EventKind.permission: PermissionGroup
+enum class AppPermission(val group: PermissionGroup) {
+    ReceiveSms(PermissionGroup.Sms),
+    ReadCallLog(PermissionGroup.CallLog),
+    ReadPhoneState(PermissionGroup.Phone),
+    ReadPhoneNumbers(PermissionGroup.Phone),
+    Notifications(PermissionGroup.Notifications),
+}
+
+val PermissionGroup.requirements: List<AppPermission>
+    get() = AppPermission.entries.filter { it.group == this }
+
+val EventKind.requirement: AppPermission
     get() = when (this) {
-        EventKind.Sms -> PermissionGroup.Sms
-        EventKind.MissedCall -> PermissionGroup.CallLog
+        EventKind.Sms -> AppPermission.ReceiveSms
+        EventKind.MissedCall -> AppPermission.ReadCallLog
     }
+
+val EventKind.permission: PermissionGroup
+    get() = requirement.group
 
 @Serializable
 @JvmInline
 value class SimKey private constructor(val value: String) {
+    val subscriptionId: Int? get() = value.removePrefix("sub:").takeIf { it != value }?.toIntOrNull()
+
     companion object {
         fun subscription(id: Int) = SimKey("sub:$id")
         fun slot(index: Int) = SimKey("slot:$index")
@@ -28,12 +44,25 @@ data class SimIdentity(val key: SimKey, val slot: Int?, val carrier: String, val
     val tag: SimTag get() = SimTag(slot, name, carrier)
 
     companion object {
-        fun resolve(active: Map<Int, SimIdentity>, subscriptionId: Int?, slotIndex: Int?): SimIdentity {
+        fun resolve(
+            active: Map<Int, SimIdentity>,
+            subscriptionId: Int?,
+            slotIndex: Int?,
+            fallback: Map<Int, SimIdentity> = emptyMap(),
+        ): SimIdentity {
             val id = subscriptionId?.takeIf { it >= 0 }
             val slot = slotIndex?.takeIf { it >= 0 }
-            id?.let(active::get)?.let { return it }
-            val key = id?.let(SimKey::subscription) ?: slot?.let(SimKey::slot) ?: SimKey.Unknown
-            return SimIdentity(key, slot, "", "", "")
+            if (id != null) {
+                active[id]?.let { return it }
+                fallback[id]?.let { return it }
+                return SimIdentity(SimKey.subscription(id), slot, "", "", "")
+            }
+            if (slot != null) {
+                active.values.singleOrNull { it.slot == slot }?.let { return it }
+                return SimIdentity(SimKey.slot(slot), slot, "", "", "")
+            }
+            active.values.singleOrNull()?.let { return it }
+            return SimIdentity(SimKey.Unknown, null, "", "", "")
         }
     }
 }

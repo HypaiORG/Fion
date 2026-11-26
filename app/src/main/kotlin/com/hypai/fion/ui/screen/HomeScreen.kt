@@ -93,8 +93,9 @@ import com.hypai.fion.effectiveChannels
 import com.hypai.fion.forward.EventKind
 import com.hypai.fion.forward.Language
 import com.hypai.fion.forward.PermissionGroup
+import com.hypai.fion.forward.TemplateVariable
 import com.hypai.fion.forward.permission
-import com.hypai.fion.forward.resolve
+import com.hypai.fion.forward.usedVariables
 import com.hypai.fion.store.Settings
 import com.hypai.fion.store.Stats
 import com.hypai.fion.ui.currentLanguage
@@ -160,8 +161,9 @@ internal fun homeNotice(settings: Settings, readiness: Readiness, language: Lang
     if (settings.bark.endpoint() == null) return HomeNotice.Bark
     active.firstOrNull { !readiness.allows(it) }?.let { return HomeNotice.Permission(it.permission) }
     val missing = active.asSequence()
-        .flatMap { kind -> settings.push(kind).template.resolve(kind, language).requiredPermissions(kind) }
+        .flatMap { kind -> settings.push(kind).template.usedVariables(kind, language) }
         .filterNot(readiness::allows)
+        .map(TemplateVariable::permission)
         .minByOrNull(PermissionGroup::ordinal)
     return missing?.let(HomeNotice::Permission)
 }

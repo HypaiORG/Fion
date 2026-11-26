@@ -56,6 +56,9 @@ class Forwarder(
     fun accepts(settings: Settings, state: ForwardState, kind: EventKind): Boolean =
         kind in enabledKinds(settings, state)
 
+    suspend fun usedVariables(kind: EventKind): Set<TemplateVariable> =
+        settingsStore.snapshot().push(kind).template.usedVariables(kind, language())
+
     suspend fun forward(
         event: ForwardEvent,
         timeout: Duration = PUSH_TIMEOUT,
@@ -197,7 +200,7 @@ private fun ForwardEvent.deliveryId(secret: String): String {
 }
 
 fun ForwardEvent.toMessage(choice: TemplateChoice, zone: ZoneId, language: Language, deliverySecret: String): Message {
-    val template = choice.resolve(kind, language)
+    val template = choice.resolve(kind, language, sim)
     return Message(
         id = deliveryId(deliverySecret),
         kind = kind,

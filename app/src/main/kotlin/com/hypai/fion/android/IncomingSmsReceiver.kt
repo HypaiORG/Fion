@@ -10,12 +10,33 @@ import com.hypai.fion.appContainer
 import com.hypai.fion.forward.EventKind
 import com.hypai.fion.forward.ForwardEvent
 import com.hypai.fion.forward.Forwarder
+import com.hypai.fion.forward.TemplateVariable
+import com.hypai.fion.forward.usedVariables
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.Duration.Companion.seconds
 import kotlinx.coroutines.launch
 
 private const val BROADCAST_BUDGET_MS = 6_000L
+
+private val SUBSCRIPTION_EXTRA_KEYS = arrayOf(
+    SubscriptionManager.EXTRA_SUBSCRIPTION_INDEX,
+    "subscription",
+    "sub_id",
+)
+
+private val SLOT_EXTRA_KEYS = arrayOf(
+    SubscriptionManager.EXTRA_SLOT_INDEX,
+    "slot",
+    "phone",
+    "simId",
+)
+
+internal fun firstValidIndex(keys: Array<String>, read: (String) -> Int?): Int? =
+    keys.firstNotNullOfOrNull { key -> read(key)?.takeIf { it >= 0 } }
+
+internal fun resolveSmsTimestamp(pduTimestampMs: Long, receivedAtMs: Long): Long =
+    pduTimestampMs.takeIf { it > 0L } ?: receivedAtMs
 
 class IncomingSmsReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
@@ -29,9 +50,11 @@ class IncomingSmsReceiver : BroadcastReceiver() {
                 val settings = app.settingsStore.snapshot()
                 if (settings.autoStartOnBoot) app.forwarder.activate()
                 if (!app.forwarder.accepts(settings, app.stateStore.snapshot(), EventKind.Sms)) return@launch
+                val includeNumber = TemplateVariable.SimNumber in settings.push(EventKind.Sms).template.usedVariables(EventKind.Sms)
                 val sim = app.sims.sim(
-                    subscriptionId = intent.intExtraOrNull(SubscriptionManager.EXTRA_SUBSCRIPTION_INDEX),
-                    slotIndex = intent.intExtraOrNull(SubscriptionManager.EXTRA_SLOT_INDEX),
+                    subscriptionId = firstValidIndex(SUBSCRIPTION_EXTRA_KEYS, intent::intExtraOrNull),
+                    slotIndex = firstValidIndex(SLOT_EXTRA_KEYS, intent::intExtraOrNull),
+                    includeNumber = includeNumber,
                 )
                 val events = Intents.getMessagesFromIntent(intent).orEmpty()
                     .groupBy { it.displayOriginatingAddress.orEmpty() }
@@ -39,7 +62,7 @@ class IncomingSmsReceiver : BroadcastReceiver() {
                         ForwardEvent.Sms(
                             from = from,
                             sim = sim,
-                            occurredAtMs = parts.first().timestampMillis,
+                            occurredAtMs = resolveSmsTimestamp(parts.first().timestampMillis, receivedAt),
                             receivedAtMs = receivedAt,
                             content = parts.joinToString("") { it.displayMessageBody.orEmpty() },
                         )

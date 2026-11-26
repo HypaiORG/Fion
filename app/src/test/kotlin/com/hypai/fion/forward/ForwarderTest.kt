@@ -264,7 +264,7 @@ class ForwarderTest {
     @Test
     fun `first sync only records the watermark`() = runTest {
         val transport = ScriptedTransport()
-        val sync = MissedCallSync({ CallLogSnapshot(41, listOf(LoggedMissedCall(41, call()))) }, stateStore, forwarder(transport))
+        val sync = MissedCallSync({ _, _ -> CallLogSnapshot(41, listOf(LoggedMissedCall(41, call()))) }, stateStore, forwarder(transport))
 
         sync.sync()
 
@@ -276,8 +276,13 @@ class ForwarderTest {
     fun `later sync forwards new missed calls and advances the watermark`() = runTest {
         stateBacking.updateData { it.copy(callLogWatermark = 41) }
         val asked = mutableListOf<Long?>()
+        val requestedVars = mutableListOf<Set<TemplateVariable>>()
         val sync = MissedCallSync(
-            { after -> asked += after; CallLogSnapshot(43, listOf(LoggedMissedCall(42, call(receivedAt = 2_000L)), LoggedMissedCall(43, call(receivedAt = 3_000L)))) },
+            { after, vars ->
+                asked += after
+                requestedVars += vars
+                CallLogSnapshot(43, listOf(LoggedMissedCall(42, call(receivedAt = 2_000L)), LoggedMissedCall(43, call(receivedAt = 3_000L))))
+            },
             stateStore,
             forwarder(ScriptedTransport(ok, ok)),
         )
@@ -285,8 +290,40 @@ class ForwarderTest {
         sync.sync()
 
         assertEquals(listOf<Long?>(41L), asked)
+        assertEquals(
+            listOf(setOf(TemplateVariable.CallFrom, TemplateVariable.CallTime, TemplateVariable.SimNumber, TemplateVariable.CallCount)),
+            requestedVars,
+        )
         assertEquals(43L, stateBacking.value.callLogWatermark)
         assertEquals(2, stats.missedCalls)
+    }
+
+    @Test
+    fun `sync passes only template used variables to call log reader`() = runTest {
+        stateBacking.updateData { it.copy(callLogWatermark = 41) }
+        settingsBacking.updateData {
+            it.withPush(
+                EventKind.MissedCall,
+                it.callPush.copy(
+                    template = TemplateChoice.Custom(
+                        Template(listOf(TemplatePart.Var(TemplateVariable.CallFrom)), listOf(TemplatePart.Var(TemplateVariable.CallTime))),
+                    ),
+                ),
+            )
+        }
+        var captured: Set<TemplateVariable>? = null
+        val sync = MissedCallSync(
+            { _, vars ->
+                captured = vars
+                CallLogSnapshot(41, emptyList())
+            },
+            stateStore,
+            forwarder(ScriptedTransport()),
+        )
+
+        sync.sync()
+
+        assertEquals(setOf(TemplateVariable.CallFrom, TemplateVariable.CallTime), captured)
     }
 
     @Test
@@ -303,7 +340,7 @@ class ForwarderTest {
         }
         val fwd = forwarder(transport)
         val sync = MissedCallSync(
-            { after -> CallLogSnapshot(43, log.filter { it.id > (after ?: 0) }) },
+            { after, _ -> CallLogSnapshot(43, log.filter { it.id > (after ?: 0) }) },
             stateStore,
             fwd,
         )
@@ -373,7 +410,7 @@ class ForwarderTest {
 
     @Test
     fun `sync without permission leaves the watermark untouched`() = runTest {
-        MissedCallSync({ null }, stateStore, forwarder(ScriptedTransport())).sync()
+        MissedCallSync({ _, _ -> null }, stateStore, forwarder(ScriptedTransport())).sync()
 
         assertEquals(null, stateBacking.value.callLogWatermark)
     }
@@ -384,7 +421,7 @@ class ForwarderTest {
         stateBacking.updateData { it.copy(callLogWatermark = 1) }
         val transport = ScriptedTransport()
 
-        MissedCallSync({ CallLogSnapshot(5, listOf(LoggedMissedCall(5, call()))) }, stateStore, forwarder(transport)).sync()
+        MissedCallSync({ _, _ -> CallLogSnapshot(5, listOf(LoggedMissedCall(5, call()))) }, stateStore, forwarder(transport)).sync()
 
         assertEquals(5L, stateBacking.value.callLogWatermark)
         assertTrue(transport.requests.isEmpty())
@@ -457,8 +494,9 @@ class ForwarderTest {
         stateBacking.updateData { it.copy(callLogWatermark = 10) }
         val transport = ScriptedTransport()
         val sync = MissedCallSync(
-            { after ->
+            { after, vars ->
                 assertEquals(null, after)
+                assertEquals(emptySet<TemplateVariable>(), vars)
                 CallLogSnapshot(42, emptyList())
             },
             stateStore,

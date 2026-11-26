@@ -25,6 +25,11 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
+private sealed interface ServiceMode {
+    data object Stopped : ServiceMode
+    data class Running(val watchCallLog: Boolean) : ServiceMode
+}
+
 class KeepAliveService : Service() {
     private var callLogObserver: ContentObserver? = null
     private var pendingSync: Job? = null
@@ -53,16 +58,23 @@ class KeepAliveService : Service() {
         try {
             startForeground(NOTIFICATION_ID, notification(), ServiceInfo.FOREGROUND_SERVICE_TYPE_REMOTE_MESSAGING)
         } catch (_: ForegroundServiceStartNotAllowedException) {
-            active = false
-            watchingCallLog = false
+            running = ServiceMode.Stopped
             stopSelf(startId)
             return START_NOT_STICKY
         }
-        active = true
+        val target = desired
+        if (intent != null && target is ServiceMode.Stopped) {
+            running = ServiceMode.Stopped
+            stopSelf(startId)
+            return START_NOT_STICKY
+        }
         if (intent == null) {
+            running = ServiceMode.Running(watchCallLog = false)
             appContainer.scope.launch { appContainer.coordinator.reconcile() }
         } else {
-            syncCallLogObserver(intent.getBooleanExtra(EXTRA_WATCH_CALL_LOG, false))
+            val watch = (target as? ServiceMode.Running)?.watchCallLog
+                ?: intent.getBooleanExtra(EXTRA_WATCH_CALL_LOG, false)
+            syncCallLogObserver(watch)
         }
         return START_STICKY
     }
@@ -70,8 +82,7 @@ class KeepAliveService : Service() {
     override fun onDestroy() {
         unregisterNetworkCallback()
         clearCallLogObserver()
-        active = false
-        watchingCallLog = false
+        running = ServiceMode.Stopped
         super.onDestroy()
     }
 
@@ -112,10 +123,10 @@ class KeepAliveService : Service() {
         val shouldAttach = watch && isGranted(Manifest.permission.READ_CALL_LOG)
         if (!shouldAttach) {
             clearCallLogObserver()
-            watchingCallLog = false
+            running = ServiceMode.Running(watchCallLog = false)
             return
         }
-        watchingCallLog = true
+        running = ServiceMode.Running(watchCallLog = true)
         if (callLogObserver != null) return
         val observer = object : ContentObserver(Handler(Looper.getMainLooper())) {
             override fun onChange(selfChange: Boolean) {
@@ -158,21 +169,27 @@ class KeepAliveService : Service() {
         private const val EXTRA_WATCH_CALL_LOG = "watch_call_log"
 
         @Volatile
-        private var active = false
+        private var running: ServiceMode = ServiceMode.Stopped
 
         @Volatile
-        private var watchingCallLog = false
+        private var desired: ServiceMode = ServiceMode.Stopped
 
         fun reconcile(context: Context, shouldRun: Boolean, watchCallLog: Boolean) {
-            if (!shouldRun) {
-                if (active) context.stopService(Intent(context, KeepAliveService::class.java))
+            val target = if (shouldRun) ServiceMode.Running(watchCallLog) else ServiceMode.Stopped
+            val previous = desired
+            desired = target
+            if (target is ServiceMode.Stopped) {
+                if (running != ServiceMode.Stopped || previous != ServiceMode.Stopped) {
+                    context.stopService(Intent(context, KeepAliveService::class.java))
+                }
                 return
             }
-            if (active && watchingCallLog == watchCallLog) return
+            if (running == target && previous == target) return
             val intent = Intent(context, KeepAliveService::class.java).putExtra(EXTRA_WATCH_CALL_LOG, watchCallLog)
             try {
                 context.startForegroundService(intent)
             } catch (_: ForegroundServiceStartNotAllowedException) {
+                desired = running
                 // Android 12+ blocks foreground service starts from the background unless the app is
                 // exempt from battery optimization: https://developer.android.com/develop/background-work/services/fgs/restrictions-bg-start
             }

@@ -37,7 +37,7 @@ class TemplateEditorTest {
     @Test
     fun `chip placements localize labels mark missing permissions and map raw offsets`() {
         val raw = "SMS · $smsFrom/$simNumber"
-        val placements = computeChipPlacements(raw, Language.En, EventKind.Sms, isGranted = { it != PermissionGroup.Phone })
+        val placements = computeChipPlacements(raw, Language.En, EventKind.Sms, isGranted = { it.permission != PermissionGroup.Phone })
 
         assertEquals(2, placements.size)
         assertEquals(TemplateVariable.SmsFrom, placements[0].token.variable)

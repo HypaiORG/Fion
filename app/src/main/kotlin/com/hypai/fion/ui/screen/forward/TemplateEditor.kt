@@ -2,7 +2,6 @@ package com.hypai.fion.ui.screen.forward
 
 import com.hypai.fion.forward.EventKind
 import com.hypai.fion.forward.Language
-import com.hypai.fion.forward.PermissionGroup
 import com.hypai.fion.forward.TemplatePart
 import com.hypai.fion.forward.TemplateVariable
 import com.hypai.fion.forward.normalizeParts
@@ -98,13 +97,13 @@ fun computeChipPlacements(
     buffer: String,
     language: Language,
     kind: EventKind? = null,
-    isGranted: (PermissionGroup) -> Boolean = { true },
+    isGranted: (TemplateVariable) -> Boolean = { true },
 ): List<ChipPlacement> {
     val tokens = findBufferTokens(buffer, kind)
     if (tokens.isEmpty()) return emptyList()
     var delta = 0
     return tokens.map { token ->
-        val missing = !isGranted(token.variable.permission)
+        val missing = !isGranted(token.variable)
         val rendered = formatChipText(token.variable.displayName(language), missing)
         val visualStart = token.start + delta
         val visualEnd = visualStart + rendered.length

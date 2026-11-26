@@ -2,6 +2,7 @@ package com.hypai.fion.ui.screen
 
 import com.hypai.fion.android.Readiness
 import com.hypai.fion.bark.BarkSettings
+import com.hypai.fion.forward.AppPermission
 import com.hypai.fion.forward.EventKind
 import com.hypai.fion.forward.Language
 import com.hypai.fion.forward.PermissionGroup
@@ -16,8 +17,10 @@ import org.junit.Test
 
 class HomeNoticeTest {
     private val barkReady = BarkSettings(deviceKey = "k")
-    private val allReady = Readiness(sms = true, callLog = true, phone = true, batteryUnrestricted = true, notifications = true)
-    private val noneReady = Readiness(sms = false, callLog = false, phone = false, batteryUnrestricted = false, notifications = false)
+    private val allPerms = AppPermission.entries.toSet()
+    private val phonePerms = setOf(AppPermission.ReadPhoneState, AppPermission.ReadPhoneNumbers)
+    private val allReady = Readiness(granted = allPerms, batteryUnrestricted = true)
+    private val noneReady = Readiness(granted = emptySet(), batteryUnrestricted = false)
 
     @Test
     fun `no banner is shown when all channels are disabled`() {
@@ -43,11 +46,11 @@ class HomeNoticeTest {
         assertEquals(HomeNotice.Permission(PermissionGroup.Sms), homeNotice(readyBark, noneReady, Language.Zh))
         assertEquals(
             HomeNotice.Permission(PermissionGroup.CallLog),
-            homeNotice(readyBark, noneReady.copy(sms = true), Language.Zh),
+            homeNotice(readyBark, noneReady.copy(granted = setOf(AppPermission.ReceiveSms)), Language.Zh),
         )
         assertEquals(
             HomeNotice.Permission(PermissionGroup.Phone),
-            homeNotice(readyBark, allReady.copy(phone = false), Language.Zh),
+            homeNotice(readyBark, allReady.copy(granted = allPerms - phonePerms), Language.Zh),
         )
         assertNull(homeNotice(readyBark, allReady, Language.Zh))
     }
@@ -55,11 +58,9 @@ class HomeNoticeTest {
     @Test
     fun `disabled channels never trigger or shadow banners`() {
         val smsOnly = Settings(bark = barkReady, channels = setOf(EventKind.Sms))
+        val noCallNoPhone = allReady.copy(granted = allPerms - phonePerms - AppPermission.ReadCallLog)
 
-        assertEquals(
-            HomeNotice.Permission(PermissionGroup.Phone),
-            homeNotice(smsOnly, allReady.copy(callLog = false, phone = false), Language.Zh),
-        )
+        assertEquals(HomeNotice.Permission(PermissionGroup.Phone), homeNotice(smsOnly, noCallNoPhone, Language.Zh))
 
         val smsWithoutSimVars = smsOnly.withPush(
             EventKind.Sms,
@@ -72,11 +73,11 @@ class HomeNoticeTest {
                 ),
             ),
         )
-        assertNull(homeNotice(smsWithoutSimVars, allReady.copy(callLog = false, phone = false), Language.Zh))
+        assertNull(homeNotice(smsWithoutSimVars, noCallNoPhone, Language.Zh))
     }
 
     @Test
-    fun `any sim variable in an active channel triggers phone banner when phone is denied`() {
+    fun `any sim variable in an active channel triggers phone banner when its permission is denied`() {
         for (simVar in listOf(TemplateVariable.SimCarrier, TemplateVariable.SimName, TemplateVariable.SimNumber)) {
             val settings = Settings(bark = barkReady, channels = setOf(EventKind.MissedCall)).let { base ->
                 base.withPush(
@@ -93,8 +94,34 @@ class HomeNoticeTest {
             }
             assertEquals(
                 HomeNotice.Permission(PermissionGroup.Phone),
-                homeNotice(settings, allReady.copy(sms = false, phone = false), Language.En),
+                homeNotice(settings, allReady.copy(granted = allPerms - phonePerms - AppPermission.ReceiveSms), Language.En),
             )
         }
+    }
+
+    @Test
+    fun `sim name and carrier only require phone state while sim number requires phone numbers`() {
+        val smsNameOnly = Settings(bark = barkReady, channels = setOf(EventKind.Sms)).let { base ->
+            base.withPush(
+                EventKind.Sms,
+                base.smsPush.copy(
+                    template = TemplateChoice.Custom(
+                        Template(listOf(TemplatePart.Var(TemplateVariable.SimCarrier)), listOf(TemplatePart.Var(TemplateVariable.SimName))),
+                    ),
+                ),
+            )
+        }
+        val stateOnly = allReady.copy(granted = allPerms - AppPermission.ReadPhoneNumbers)
+        assertNull(homeNotice(smsNameOnly, stateOnly, Language.Zh))
+
+        val smsWithNumber = smsNameOnly.withPush(
+            EventKind.Sms,
+            smsNameOnly.smsPush.copy(
+                template = TemplateChoice.Custom(
+                    Template(listOf(TemplatePart.Var(TemplateVariable.SmsFrom)), listOf(TemplatePart.Var(TemplateVariable.SimNumber))),
+                ),
+            ),
+        )
+        assertEquals(HomeNotice.Permission(PermissionGroup.Phone), homeNotice(smsWithNumber, stateOnly, Language.Zh))
     }
 }

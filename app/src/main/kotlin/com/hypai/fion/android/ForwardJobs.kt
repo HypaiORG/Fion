@@ -9,6 +9,7 @@ import android.content.ComponentName
 import android.content.Context
 import android.provider.CallLog
 import com.hypai.fion.appContainer
+import java.util.concurrent.ConcurrentHashMap
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 
@@ -76,14 +77,20 @@ object ForwardJobs {
 }
 
 class CallLogJobService : JobService() {
-    private val running = mutableMapOf<Int, Job>()
+    private val running = ConcurrentHashMap<Int, Job>()
 
     override fun onStartJob(params: JobParameters): Boolean {
         val app = appContainer
-        running[params.jobId] = app.scope.launch {
-            app.coordinator.onCallLogTriggered(params.jobId)
-            jobFinished(params, false)
+        val jobId = params.jobId
+        val job = app.scope.launch {
+            try {
+                app.coordinator.onCallLogTriggered(jobId)
+                jobFinished(params, false)
+            } finally {
+                running.remove(jobId, coroutineContext[Job])
+            }
         }
+        running[jobId] = job
         return true
     }
 
@@ -94,16 +101,25 @@ class CallLogJobService : JobService() {
 }
 
 class RetryJobService : JobService() {
+    @Volatile
     private var running: Job? = null
 
     override fun onStartJob(params: JobParameters): Boolean {
         val app = appContainer
-        running = app.scope.launch { jobFinished(params, !app.forwarder.retryPending()) }
+        val job = app.scope.launch {
+            try {
+                jobFinished(params, !app.forwarder.retryPending())
+            } finally {
+                if (running == coroutineContext[Job]) running = null
+            }
+        }
+        running = job
         return true
     }
 
     override fun onStopJob(params: JobParameters): Boolean {
         running?.cancel()
+        running = null
         return true
     }
 }

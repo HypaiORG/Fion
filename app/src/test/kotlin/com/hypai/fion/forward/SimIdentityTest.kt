@@ -14,15 +14,24 @@ class SimIdentityTest {
     }
 
     @Test
-    fun `an inactive subscription keeps its own key`() {
+    fun `an inactive subscription falls back to historical metadata or keeps its own key`() {
+        val archived = SimIdentity(SimKey.subscription(9), null, "SoftBank", "eSIM", "")
+
+        assertEquals(archived, SimIdentity.resolve(active, subscriptionId = 9, slotIndex = 1, fallback = mapOf(9 to archived)))
         assertEquals(SimIdentity(SimKey.subscription(9), 1, "", "", ""), SimIdentity.resolve(active, subscriptionId = 9, slotIndex = 1))
         assertEquals(SimIdentity(SimKey.subscription(5), null, "", "", ""), SimIdentity.resolve(emptyMap(), subscriptionId = 5, slotIndex = null))
     }
 
     @Test
-    fun `without a valid subscription the slot and then unknown are used`() {
-        assertEquals(SimIdentity(SimKey.slot(1), 1, "", "", ""), SimIdentity.resolve(active, subscriptionId = -1, slotIndex = 1))
-        assertEquals(SimIdentity(SimKey.Unknown, null, "", "", ""), SimIdentity.resolve(active, subscriptionId = null, slotIndex = -1))
+    fun `without a valid subscription the slot matches active sim or falls back to slot and single sim`() {
+        val mobile = SimIdentity(SimKey.subscription(2), 0, "中国移动", "BJ", "+8613800000000")
+        val dual = mapOf(2 to mobile, 5 to unicom)
+
+        assertEquals(unicom, SimIdentity.resolve(dual, subscriptionId = -1, slotIndex = 1))
+        assertEquals(SimIdentity(SimKey.slot(2), 2, "", "", ""), SimIdentity.resolve(dual, subscriptionId = -1, slotIndex = 2))
+        assertEquals(unicom, SimIdentity.resolve(active, subscriptionId = null, slotIndex = -1))
+        assertEquals(SimIdentity(SimKey.Unknown, null, "", "", ""), SimIdentity.resolve(dual, subscriptionId = null, slotIndex = -1))
+        assertEquals(SimIdentity(SimKey.Unknown, null, "", "", ""), SimIdentity.resolve(emptyMap(), subscriptionId = null, slotIndex = -1))
     }
 
     @Test

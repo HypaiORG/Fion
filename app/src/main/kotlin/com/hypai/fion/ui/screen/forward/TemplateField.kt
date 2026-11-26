@@ -107,7 +107,6 @@ import com.hypai.fion.R
 import com.hypai.fion.android.Readiness
 import com.hypai.fion.forward.EventKind
 import com.hypai.fion.forward.Language
-import com.hypai.fion.forward.PermissionGroup
 import com.hypai.fion.forward.TemplatePart
 import com.hypai.fion.forward.TemplateVariable
 import com.hypai.fion.forward.templateVariables
@@ -211,7 +210,7 @@ internal fun TemplateField(
     var textLayoutResult by remember { mutableStateOf<TextLayoutResult?>(null) }
     var textBoxOriginInWindow by remember { mutableStateOf(Offset.Zero) }
 
-    val placements by remember(language, kind, readiness.sms, readiness.callLog, readiness.phone) {
+    val placements by remember(language, kind, readiness.granted) {
         derivedStateOf { computeChipPlacements(textState.text.toString(), language, kind, readiness::allows) }
     }
     val drawnChips = remember(textLayoutResult, placements, insetPx) {
@@ -287,7 +286,7 @@ internal fun TemplateField(
     }
 
     val inputTransformation = remember(kind) { atomicTokenInputTransformation(kind) }
-    val outputTransformation = remember(language, kind, readiness.sms, readiness.callLog, readiness.phone) {
+    val outputTransformation = remember(language, kind, readiness.granted) {
         chipOutputTransformation(language, kind, readiness::allows)
     }
     val activeReplaceToken = (pickerTarget as? VariablePickerTarget.Replace)?.token
@@ -447,7 +446,7 @@ private fun atomicTokenInputTransformation(kind: EventKind): InputTransformation
 private fun chipOutputTransformation(
     language: Language,
     kind: EventKind,
-    isGranted: (PermissionGroup) -> Boolean,
+    isGranted: (TemplateVariable) -> Boolean,
 ): OutputTransformation = OutputTransformation {
     for (placement in computeChipPlacements(asCharSequence().toString(), language, kind, isGranted)) {
         val rawLen = placement.token.end - placement.token.start
@@ -649,7 +648,7 @@ private fun computeAnchorInWindow(
 private fun VariablePickerPopup(
     items: List<TemplateVariable>,
     activeVariable: TemplateVariable?,
-    isGranted: (PermissionGroup) -> Boolean,
+    isGranted: (TemplateVariable) -> Boolean,
     language: Language,
     anchor: PopupAnchor,
     onSelect: (TemplateVariable) -> Unit,
@@ -755,7 +754,7 @@ private fun VariablePickerPopup(
                 verticalArrangement = Arrangement.spacedBy(2.dp),
             ) {
                 items.forEach { variable ->
-                    val missing = !isGranted(variable.permission)
+                    val missing = !isGranted(variable)
                     val selected = !missing && variable == activeVariable
                     val chipColors = variable.chipColor()
                     Row(

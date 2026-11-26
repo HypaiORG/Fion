@@ -83,11 +83,11 @@ fun SettingsScreen(
     onOpen: (Screen) -> Unit,
     onBack: () -> Unit,
 ) {
-    val permissionHealth = readiness.health(settings.persistentNotification)
+    val language = currentLanguage()
+    val permissionHealth = readiness.health(settings, language)
     val haptics = LocalHapticFeedback.current
     val uriHandler = LocalUriHandler.current
     val context = LocalContext.current
-    val language = currentLanguage()
     val noBrowser = stringResource(R.string.settings_no_browser)
     var confirmReset by rememberSaveable { mutableStateOf(false) }
     var pickingLanguage by rememberSaveable { mutableStateOf(false) }

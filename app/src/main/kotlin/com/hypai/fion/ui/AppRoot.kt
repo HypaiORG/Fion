@@ -7,6 +7,7 @@ import androidx.activity.SystemBarStyle
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.remember
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
@@ -37,6 +38,7 @@ import com.hypai.fion.ui.design.Motion
 import com.hypai.fion.ui.screen.BarkScreen
 import com.hypai.fion.ui.screen.HomeScreen
 import com.hypai.fion.ui.screen.KeepAliveScreen
+import com.hypai.fion.ui.screen.LocalRefreshReadiness
 import com.hypai.fion.ui.screen.SettingsScreen
 import com.hypai.fion.ui.screen.forward.ForwardScreen
 import com.hypai.fion.ui.screen.onboarding.OnboardingScreen
@@ -83,6 +85,10 @@ class MainViewModel(private val app: AppContainer) : ViewModel() {
 
     fun finishOnboarding() {
         viewModelScope.launch { app.coordinator.completeOnboarding() }
+    }
+
+    fun refreshReadiness() {
+        app.coordinator.refreshReadiness()
     }
 
     fun onForeground() {
@@ -199,12 +205,14 @@ private fun AppRoot() {
         }
     }
 
-    NavDisplay(
-        backStack = backStack,
-        onBack = goBack,
-        entryDecorators = decorators,
-        transitionSpec = { Motion.PushPage },
-        popTransitionSpec = { Motion.PopPage },
-        entryProvider = provider,
-    )
+    CompositionLocalProvider(LocalRefreshReadiness provides model::refreshReadiness) {
+        NavDisplay(
+            backStack = backStack,
+            onBack = goBack,
+            entryDecorators = decorators,
+            transitionSpec = { Motion.PushPage },
+            popTransitionSpec = { Motion.PopPage },
+            entryProvider = provider,
+        )
+    }
 }
