@@ -1,5 +1,6 @@
 package com.hypai.fion.ui.design
 
+import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.core.animateDpAsState
@@ -52,6 +53,7 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.layout.layout
 import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
@@ -64,6 +66,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.offset
+import com.hypai.fion.R
 
 private val PrimaryButtonBrush = Brush.verticalGradient(listOf(Palette.ButtonTop, Palette.Ink))
 private val FieldCorner = 14.dp
@@ -226,6 +229,43 @@ fun FormField(
         if (hint != null) {
             val color by animateColorAsState(hintColor, tween(150), label = "fieldHint")
             Text(hint, Modifier.padding(horizontal = 16.dp), style = Type.Caption, color = color)
+        }
+    }
+}
+
+@Composable
+fun ActionRow(
+    badge: BadgeStyle,
+    title: String,
+    subtitle: String,
+    action: String,
+    onAction: () -> Unit,
+    modifier: Modifier = Modifier,
+    contentPadding: PaddingValues = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
+    ready: Boolean = false,
+    clickableRow: Boolean = false,
+) {
+    Row(
+        modifier
+            .fillMaxWidth()
+            .then(if (clickableRow) Modifier.clickable(role = Role.Button, onClick = onAction) else Modifier)
+            .heightIn(min = 56.dp)
+            .padding(contentPadding),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        IconBadge(badge, size = 40.dp, iconSize = 19.dp, alert = !ready)
+        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(1.dp)) {
+            Text(title, style = Type.RowTitle, fontWeight = FontWeight.Medium, color = Palette.Ink)
+            Text(subtitle, style = Type.Secondary, color = Palette.Muted)
+        }
+        if (clickableRow) {
+            ActionPillTag(action)
+        } else {
+            AnimatedContent(ready, contentAlignment = Alignment.CenterEnd, transitionSpec = { Motion.Swap }, label = "rowAction") { done ->
+                if (done) Text(stringResource(R.string.keep_enabled), style = Type.Secondary, color = Palette.Navy)
+                else ActionPill(action, onClick = onAction)
+            }
         }
     }
 }

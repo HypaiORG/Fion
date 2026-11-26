@@ -48,7 +48,9 @@ import com.hypai.fion.android.Readiness
 import com.hypai.fion.bark.DEFAULT_BARK_SERVER
 import com.hypai.fion.bark.displayHost
 import com.hypai.fion.bark.endpoint
+import com.hypai.fion.forward.PermissionGroup
 import com.hypai.fion.store.Settings
+import com.hypai.fion.ui.design.BadgeStyle
 import com.hypai.fion.ui.design.GlassCard
 import com.hypai.fion.ui.design.IconBadge
 import com.hypai.fion.ui.design.Icons
@@ -59,12 +61,12 @@ import com.hypai.fion.ui.design.Palette
 import com.hypai.fion.ui.design.SegmentedChoice
 import com.hypai.fion.ui.design.ShieldDecor
 import com.hypai.fion.ui.design.Type
+import com.hypai.fion.ui.screen.look
 
 internal enum class PermissionStatus { Granted, Missing, Ready, Partial }
 
 internal enum class PermissionGuide(
-    val badgeBg: Color,
-    val badgeTint: Color,
+    val group: PermissionGroup?,
     @param:StringRes val title: Int,
     @param:StringRes val code: Int,
     @param:StringRes val allowTitle: Int,
@@ -75,8 +77,7 @@ internal enum class PermissionGuide(
     @param:StringRes val guard: Int,
 ) {
     Sms(
-        badgeBg = Palette.NavySurface,
-        badgeTint = Palette.Navy,
+        group = PermissionGroup.Sms,
         title = R.string.privacy_perm_sms_title,
         code = R.string.privacy_perm_sms_code,
         allowTitle = R.string.privacy_perm_sms_allow_title,
@@ -87,8 +88,7 @@ internal enum class PermissionGuide(
         guard = R.string.privacy_perm_sms_guard,
     ),
     CallLog(
-        badgeBg = Palette.CrimsonSurface,
-        badgeTint = Palette.Crimson,
+        group = PermissionGroup.CallLog,
         title = R.string.privacy_perm_call_title,
         code = R.string.privacy_perm_call_code,
         allowTitle = R.string.privacy_perm_call_allow_title,
@@ -99,8 +99,7 @@ internal enum class PermissionGuide(
         guard = R.string.privacy_perm_call_guard,
     ),
     Sim(
-        badgeBg = Palette.AmberSurface,
-        badgeTint = Palette.Copper,
+        group = PermissionGroup.Phone,
         title = R.string.privacy_perm_sim_title,
         code = R.string.privacy_perm_sim_code,
         allowTitle = R.string.privacy_perm_sim_allow_title,
@@ -111,8 +110,7 @@ internal enum class PermissionGuide(
         guard = R.string.privacy_perm_sim_guard,
     ),
     Background(
-        badgeBg = Palette.GreenSurface,
-        badgeTint = Palette.Green,
+        group = null,
         title = R.string.privacy_perm_bg_title,
         code = R.string.privacy_perm_bg_code,
         allowTitle = R.string.privacy_perm_bg_allow_title,
@@ -124,21 +122,14 @@ internal enum class PermissionGuide(
     ),
     ;
 
-    val icon: ImageVector
-        get() = when (this) {
-            Sms -> Icons.Sms
-            CallLog -> Icons.MissedCall
-            Sim -> Icons.Sim
-            Background -> Icons.Battery
-        }
+    val badge: BadgeStyle get() = group?.look?.badge ?: BackgroundBadge
 
-    fun status(readiness: Readiness, persistentNotification: Boolean): PermissionStatus = when (this) {
-        Sms -> if (readiness.sms) PermissionStatus.Granted else PermissionStatus.Missing
-        CallLog -> if (readiness.callLog) PermissionStatus.Granted else PermissionStatus.Missing
-        Sim -> if (readiness.phone) PermissionStatus.Granted else PermissionStatus.Missing
-        Background -> if (readiness.backgroundReady(persistentNotification)) PermissionStatus.Ready else PermissionStatus.Partial
-    }
+    fun status(readiness: Readiness, persistentNotification: Boolean): PermissionStatus =
+        group?.let { if (readiness.allows(it)) PermissionStatus.Granted else PermissionStatus.Missing }
+            ?: if (readiness.backgroundReady(persistentNotification)) PermissionStatus.Ready else PermissionStatus.Partial
 }
+
+private val BackgroundBadge = BadgeStyle(Icons.Battery, Palette.GreenSurface, Palette.Green)
 
 private data class FeatureItem(
     val icon: ImageVector,
@@ -241,18 +232,32 @@ private fun PermissionGuideCard(guide: PermissionGuide, status: PermissionStatus
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            IconBadge(guide.icon, guide.badgeBg, guide.badgeTint, PanelShape, size = 40.dp, iconSize = 20.dp)
-            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                Text(stringResource(guide.title), style = Type.CardTitle, fontWeight = FontWeight.SemiBold, color = Palette.Ink)
+            IconBadge(guide.badge, size = 40.dp, iconSize = 20.dp)
+            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                Row(
+                    Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    Text(
+                        stringResource(guide.title),
+                        Modifier.weight(1f),
+                        style = Type.CardTitle,
+                        fontWeight = FontWeight.SemiBold,
+                        color = Palette.Ink,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                    PermissionStatusPill(status)
+                }
                 Text(
                     stringResource(guide.code),
-                    style = MonoCaption.copy(fontSize = 11.sp, lineHeight = 15.sp),
+                    style = MonoCaption.copy(fontSize = 10.5.sp, lineHeight = 14.sp),
                     color = Palette.Muted,
-                    maxLines = 2,
+                    maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                 )
             }
-            PermissionStatusPill(status)
         }
 
         BoundaryStrip(guide)

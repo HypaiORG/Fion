@@ -4,7 +4,10 @@ import com.hypai.fion.store.SimTag
 import com.hypai.fion.store.TemplateChoice
 import java.time.ZoneId
 import java.time.ZonedDateTime
+import kotlinx.serialization.json.Json
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class TemplateTest {
@@ -12,13 +15,61 @@ class TemplateTest {
     private val at = ZonedDateTime.of(2026, 11, 15, 14, 32, 8, 0, tokyo).toInstant().toEpochMilli()
 
     @Test
-    fun `replaces known variables and keeps unknown ones`() {
-        val values = mapOf(TemplateVariable.From to "1", TemplateVariable.Content to "")
+    fun `variables have unique readable domain ids bound to permission and kinds`() {
+        val ids = TemplateVariable.entries.map(TemplateVariable::id)
+        assertEquals(TemplateVariable.entries.size, ids.toSet().size)
+        assertTrue(ids.all { it.matches(Regex("""^(sms|call|sim)\.[a-z]+$""")) })
+        for (variable in TemplateVariable.entries) {
+            assertEquals(variable, TemplateVariable.fromId(variable.id))
+            assertEquals("\"${variable.id}\"", Json.encodeToString(TemplateVariable.serializer(), variable))
+        }
 
         assertEquals(
-            "a 1 {contact} 1 {from} [] {}",
-            renderTemplate("a {sender} {contact} { sender } {from} [{message}] {}", values),
+            setOf(
+                TemplateVariable.SmsFrom,
+                TemplateVariable.SmsContent,
+                TemplateVariable.SmsTime,
+                TemplateVariable.SimCarrier,
+                TemplateVariable.SimName,
+                TemplateVariable.SimNumber,
+            ),
+            EventKind.Sms.templateVariables().toSet(),
         )
+        assertEquals(
+            setOf(
+                TemplateVariable.CallFrom,
+                TemplateVariable.CallCount,
+                TemplateVariable.CallTime,
+                TemplateVariable.SimCarrier,
+                TemplateVariable.SimName,
+                TemplateVariable.SimNumber,
+            ),
+            EventKind.MissedCall.templateVariables().toSet(),
+        )
+
+        assertEquals(PermissionGroup.Sms, TemplateVariable.SmsFrom.permission)
+        assertEquals(PermissionGroup.Sms, TemplateVariable.SmsContent.permission)
+        assertEquals(PermissionGroup.Sms, TemplateVariable.SmsTime.permission)
+        assertEquals(PermissionGroup.CallLog, TemplateVariable.CallFrom.permission)
+        assertEquals(PermissionGroup.CallLog, TemplateVariable.CallCount.permission)
+        assertEquals(PermissionGroup.CallLog, TemplateVariable.CallTime.permission)
+        assertEquals(PermissionGroup.Phone, TemplateVariable.SimCarrier.permission)
+        assertEquals(PermissionGroup.Phone, TemplateVariable.SimName.permission)
+        assertEquals(PermissionGroup.Phone, TemplateVariable.SimNumber.permission)
+    }
+
+    @Test
+    fun `structured rendering preserves literal braces and resolves variable nodes`() {
+        val parts = listOf(
+            TemplatePart.Text("a "),
+            TemplatePart.Var(TemplateVariable.SmsFrom),
+            TemplatePart.Text(" {sms.from} {time} ["),
+            TemplatePart.Var(TemplateVariable.SmsContent),
+            TemplatePart.Text("] {}"),
+        )
+        val event = ForwardEvent.Sms("1", SimIdentity(SimKey.subscription(1), 0, "", "", ""), at, at, "")
+
+        assertEquals("a 1 {sms.from} {time} [] {}", renderParts(parts, event, tokyo, Language.Zh))
     }
 
     @Test
@@ -47,9 +98,14 @@ class TemplateTest {
     }
 
     @Test
-    fun `each kind renders its own template and blanks variables of the other kind`() {
-        val smsTemplate = TemplateChoice.Custom(Template("S {unknown}", "{message}|{callCount}"))
-        val callTemplate = TemplateChoice.Custom(Template("C", "{message}|{callCount}"))
+    fun `each kind renders its own variables and blanks variables of the other kind`() {
+        val mixedBody = listOf(
+            TemplatePart.Var(TemplateVariable.SmsContent),
+            TemplatePart.Text("|"),
+            TemplatePart.Var(TemplateVariable.CallCount),
+        )
+        val smsTemplate = TemplateChoice.Custom(Template(listOf(TemplatePart.Text("S {unknown}")), mixedBody))
+        val callTemplate = TemplateChoice.Custom(Template(listOf(TemplatePart.Text("C")), mixedBody))
 
         val sms = ForwardEvent.Sms("1", SimIdentity(SimKey.subscription(1), 0, "", "", ""), at, at, "hi").toMessage(smsTemplate, tokyo, Language.Zh, "k")
         val call = ForwardEvent.MissedCall("1", SimIdentity(SimKey.subscription(1), 0, "", "", ""), at, at, 2).toMessage(callTemplate, tokyo, Language.Zh, "k")
@@ -61,13 +117,55 @@ class TemplateTest {
     }
 
     @Test
-    fun `scanner preserves malformed and nested braces while substituting innermost valid tokens`() {
-        val values = mapOf(TemplateVariable.From to "1")
+    fun `normalizeParts merges adjacent text and strips empty segments`() {
+        val raw = listOf(
+            TemplatePart.Text(""),
+            TemplatePart.Text("a"),
+            TemplatePart.Text("b"),
+            TemplatePart.Var(TemplateVariable.SmsFrom),
+            TemplatePart.Text(""),
+            TemplatePart.Text("c"),
+        )
 
-        assertEquals("{a 1}", renderTemplate("{a {sender}}", values))
-        assertEquals("{1}", renderTemplate("{{sender}}", values))
-        assertEquals("{unclosed", renderTemplate("{unclosed", values))
-        assertEquals("1}end", renderTemplate("{sender}}end", values))
+        assertEquals(
+            listOf(
+                TemplatePart.Text("ab"),
+                TemplatePart.Var(TemplateVariable.SmsFrom),
+                TemplatePart.Text("c"),
+            ),
+            normalizeParts(raw),
+        )
+        assertEquals(emptyList<TemplatePart>(), normalizeParts(listOf(TemplatePart.Text(""))))
+    }
+
+    @Test
+    fun `template required permissions filter by event kind and stay consistent across languages`() {
+        for (kind in EventKind.entries) {
+            val zhPerms = kind.defaultTemplate(Language.Zh).requiredPermissions(kind)
+            val enPerms = kind.defaultTemplate(Language.En).requiredPermissions(kind)
+            assertEquals(zhPerms, enPerms)
+            assertTrue(PermissionGroup.Phone in zhPerms)
+        }
+
+        val crossKind = Template(
+            title = listOf(TemplatePart.Var(TemplateVariable.CallCount)),
+            body = listOf(TemplatePart.Var(TemplateVariable.SmsContent)),
+        )
+        assertEquals(setOf(PermissionGroup.Sms), crossKind.requiredPermissions(EventKind.Sms))
+        assertEquals(setOf(PermissionGroup.CallLog), crossKind.requiredPermissions(EventKind.MissedCall))
+    }
+
+    @Test
+    fun `template json serializes readable domain ids`() {
+        val template = Template(
+            title = listOf(TemplatePart.Text("T "), TemplatePart.Var(TemplateVariable.SmsFrom)),
+            body = listOf(TemplatePart.Var(TemplateVariable.SimNumber)),
+        )
+        val encoded = Json.encodeToString(Template.serializer(), template)
+
+        assertTrue(encoded.contains("\"sms.from\""))
+        assertTrue(encoded.contains("\"sim.number\""))
+        assertEquals(template, Json.decodeFromString(Template.serializer(), encoded))
     }
 
     @Test
@@ -77,10 +175,10 @@ class TemplateTest {
 
         assertEquals(first.id, event.copy(receivedAtMs = at + 5_000).toMessage(TemplateChoice.Default, tokyo, Language.Zh, "k").id)
         assertEquals(32, first.id.length)
-        assertEquals(false, first.id == event.copy(content = "hello!").toMessage(TemplateChoice.Default, tokyo, Language.Zh, "k").id)
+        assertFalse(first.id == event.copy(content = "hello!").toMessage(TemplateChoice.Default, tokyo, Language.Zh, "k").id)
         assertEquals(first.id, event.copy(sim = event.sim.copy(carrier = "China Unicom")).toMessage(TemplateChoice.Default, tokyo, Language.En, "k").id)
-        assertEquals(false, first.id == event.copy(sim = event.sim.copy(key = SimKey.subscription(2))).toMessage(TemplateChoice.Default, tokyo, Language.Zh, "k").id)
-        assertEquals(false, first.id == event.toMessage(TemplateChoice.Default, tokyo, Language.Zh, "another install").id)
+        assertFalse(first.id == event.copy(sim = event.sim.copy(key = SimKey.subscription(2))).toMessage(TemplateChoice.Default, tokyo, Language.Zh, "k").id)
+        assertFalse(first.id == event.toMessage(TemplateChoice.Default, tokyo, Language.Zh, "another install").id)
     }
 
     @Test
@@ -88,14 +186,14 @@ class TemplateTest {
         val known = ForwardEvent.MissedCall("+819000000000", SimIdentity(SimKey.subscription(1), 0, "docomo", "SH", "+817000000000"), at, at, 2)
         val hidden = known.copy(from = "", sim = known.sim.copy(carrier = "", name = "", number = ""))
 
-        assertEquals("+819000000000", known.variables(tokyo, Language.Zh)[TemplateVariable.From])
-        assertEquals("+817000000000", known.variables(tokyo, Language.Zh)[TemplateVariable.Number])
-        assertEquals("docomo", known.variables(tokyo, Language.Zh)[TemplateVariable.Carrier])
-        assertEquals("SH", known.variables(tokyo, Language.Zh)[TemplateVariable.SimName])
-        assertEquals("未知号码", hidden.variables(tokyo, Language.Zh)[TemplateVariable.From])
-        assertEquals("", hidden.variables(tokyo, Language.Zh)[TemplateVariable.Number])
-        assertEquals("", hidden.variables(tokyo, Language.Zh)[TemplateVariable.Carrier])
-        assertEquals("", hidden.variables(tokyo, Language.Zh)[TemplateVariable.SimName])
+        assertEquals("+819000000000", TemplateVariable.CallFrom.resolve(known, tokyo, Language.Zh))
+        assertEquals("+817000000000", TemplateVariable.SimNumber.resolve(known, tokyo, Language.Zh))
+        assertEquals("docomo", TemplateVariable.SimCarrier.resolve(known, tokyo, Language.Zh))
+        assertEquals("SH", TemplateVariable.SimName.resolve(known, tokyo, Language.Zh))
+        assertEquals("未知号码", TemplateVariable.CallFrom.resolve(hidden, tokyo, Language.Zh))
+        assertEquals("", TemplateVariable.SimNumber.resolve(hidden, tokyo, Language.Zh))
+        assertEquals("", TemplateVariable.SimCarrier.resolve(hidden, tokyo, Language.Zh))
+        assertEquals("", TemplateVariable.SimName.resolve(hidden, tokyo, Language.Zh))
     }
 
     @Test
@@ -113,14 +211,6 @@ class TemplateTest {
     }
 
     @Test
-    fun `variables resolve strictly by canonical id`() {
-        val values = mapOf(TemplateVariable.From to "1", TemplateVariable.Number to "2")
-
-        assertEquals("1 2", renderTemplate("{sender} { simNumber }", values))
-        assertEquals("{Sender} {发件人}", renderTemplate("{Sender} {发件人}", values))
-    }
-
-    @Test
     fun `an unknown sim keeps one identity in every language`() {
         val call = ForwardEvent.MissedCall("+818000000000", SimIdentity.resolve(emptyMap(), null, null), at, at, 1)
 
@@ -131,34 +221,15 @@ class TemplateTest {
     }
 
     @Test
-    fun `findTemplateTokens matches renderer boundaries and kind variables exclude inapplicable ones`() {
-        val tokens = findTemplateTokens("a {sender} {unknown} {{time}}")
-
-        assertEquals(
-            listOf(
-                TemplateToken(2, 10, TemplateVariable.From),
-                TemplateToken(22, 28, TemplateVariable.Time),
-            ),
-            tokens,
-        )
-        assertEquals(false, TemplateVariable.CallCount in EventKind.Sms.templateVariables())
-        assertEquals(true, TemplateVariable.Content in EventKind.Sms.templateVariables())
-        assertEquals(false, TemplateVariable.Content in EventKind.MissedCall.templateVariables())
-        assertEquals(true, TemplateVariable.CallCount in EventKind.MissedCall.templateVariables())
-    }
-
-    @Test
-    fun `english display names are capitalized and from adapts to event kind`() {
-        for (kind in EventKind.entries) {
-            for (variable in kind.templateVariables()) {
-                val en = variable.displayName(Language.En, kind)
-                assertEquals(true, en.first().isUpperCase())
-                val zh = variable.displayName(Language.Zh, kind)
-                assertEquals(true, zh.isNotBlank())
-            }
+    fun `english display names are capitalized and zh names are non blank`() {
+        for (variable in TemplateVariable.entries) {
+            val en = variable.displayName(Language.En)
+            assertTrue(en.first().isUpperCase())
+            assertTrue(variable.displayName(Language.Zh).isNotBlank())
         }
-        assertEquals("Sender", TemplateVariable.From.displayName(Language.En, EventKind.Sms))
-        assertEquals("Caller", TemplateVariable.From.displayName(Language.En, EventKind.MissedCall))
-        assertEquals("对方号码", TemplateVariable.From.displayName(Language.Zh, EventKind.Sms))
+        assertEquals("Sender", TemplateVariable.SmsFrom.displayName(Language.En))
+        assertEquals("Caller", TemplateVariable.CallFrom.displayName(Language.En))
+        assertEquals("对方号码", TemplateVariable.SmsFrom.displayName(Language.Zh))
+        assertEquals("对方号码", TemplateVariable.CallFrom.displayName(Language.Zh))
     }
 }

@@ -198,14 +198,13 @@ private fun ForwardEvent.deliveryId(secret: String): String {
 
 fun ForwardEvent.toMessage(choice: TemplateChoice, zone: ZoneId, language: Language, deliverySecret: String): Message {
     val template = choice.resolve(kind, language)
-    val values = variables(zone, language)
     return Message(
         id = deliveryId(deliverySecret),
         kind = kind,
         simKey = sim.key,
         sim = sim.tag,
-        title = renderTemplate(template.title, values),
-        body = renderTemplate(template.body, values),
+        title = renderParts(template.title, this, zone, language),
+        body = renderParts(template.body, this, zone, language),
         receivedAtMs = receivedAtMs,
     )
 }

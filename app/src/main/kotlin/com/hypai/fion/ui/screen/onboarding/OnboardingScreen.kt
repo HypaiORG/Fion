@@ -50,10 +50,10 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.dp
 import com.hypai.fion.R
-import com.hypai.fion.android.PermissionGroup
 import com.hypai.fion.android.Readiness
 import com.hypai.fion.android.openAppDetails
 import com.hypai.fion.android.openBatteryExemption
+import com.hypai.fion.forward.PermissionGroup
 import com.hypai.fion.ui.design.IconBadge
 import com.hypai.fion.ui.design.Icons
 import com.hypai.fion.ui.design.Motion

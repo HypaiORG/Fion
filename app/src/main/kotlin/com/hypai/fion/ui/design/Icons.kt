@@ -50,6 +50,11 @@ object Icons {
     val Book = stroke("M2 4.5h6a4 4 0 0 1 4 4V21a3 3 0 0 0-3-3H2z", "M22 4.5h-6a4 4 0 0 0-4 4V21a3 3 0 0 1 3-3h7z")
     val Check = stroke("M20 6 9 17l-5-5", width = 2.6f)
     val Alert = stroke("M12 7v6M12 17h.01", width = 2.6f)
+    val Warning = stroke(
+        "M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z",
+        "M12 9v4M12 17h.01",
+        width = 2.1f,
+    )
     val Power = stroke("M12 3v9", "M18.4 6.6a9 9 0 1 1-12.8 0", width = 2.4f)
     val Bolt = stroke("M13 2 3 14h9l-1 8 10-12h-9z", width = 2.4f)
     val Bubble = stroke(BUBBLE)

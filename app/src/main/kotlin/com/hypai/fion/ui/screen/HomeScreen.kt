@@ -88,16 +88,20 @@ import androidx.compose.ui.unit.sp
 import com.hypai.fion.R
 import com.hypai.fion.android.Readiness
 import com.hypai.fion.android.openAppDetails
-import com.hypai.fion.android.permission
 import com.hypai.fion.bark.endpoint
 import com.hypai.fion.effectiveChannels
 import com.hypai.fion.forward.EventKind
+import com.hypai.fion.forward.Language
+import com.hypai.fion.forward.PermissionGroup
+import com.hypai.fion.forward.permission
+import com.hypai.fion.forward.resolve
 import com.hypai.fion.store.Settings
 import com.hypai.fion.store.Stats
-import com.hypai.fion.ui.design.ActionPillTag
+import com.hypai.fion.ui.currentLanguage
+import com.hypai.fion.ui.design.ActionRow
+import com.hypai.fion.ui.design.BadgeStyle
 import com.hypai.fion.ui.design.EnvelopeDecor
 import com.hypai.fion.ui.design.GlassCard
-import com.hypai.fion.ui.design.IconBadge
 import com.hypai.fion.ui.design.Icons
 import com.hypai.fion.ui.design.MetalSim
 import com.hypai.fion.ui.design.Motion
@@ -145,15 +149,21 @@ private fun FitText(
     }
 }
 
-private sealed interface Notice {
-    data object Bark : Notice
-    data class Denied(val kind: EventKind) : Notice
+internal sealed interface HomeNotice {
+    data object Bark : HomeNotice
+    data class Permission(val group: PermissionGroup) : HomeNotice
 }
 
-private fun notice(settings: Settings, readiness: Readiness): Notice? = when {
-    settings.bark.endpoint() == null -> Notice.Bark
-    else -> EventKind.entries.firstOrNull { settings.forwards(it) && !readiness.allows(it) }?.let(Notice::Denied)
-        ?: EventKind.entries.firstOrNull { !readiness.allows(it) }?.let(Notice::Denied)
+internal fun homeNotice(settings: Settings, readiness: Readiness, language: Language): HomeNotice? {
+    val active = EventKind.entries.filter(settings::forwards)
+    if (active.isEmpty()) return null
+    if (settings.bark.endpoint() == null) return HomeNotice.Bark
+    active.firstOrNull { !readiness.allows(it) }?.let { return HomeNotice.Permission(it.permission) }
+    val missing = active.asSequence()
+        .flatMap { kind -> settings.push(kind).template.resolve(kind, language).requiredPermissions(kind) }
+        .filterNot(readiness::allows)
+        .minByOrNull(PermissionGroup::ordinal)
+    return missing?.let(HomeNotice::Permission)
 }
 
 @Composable
@@ -168,8 +178,9 @@ fun HomeScreen(
     val scroll = rememberScrollState()
     var askingPermission by rememberSaveable { mutableStateOf(false) }
     val context = LocalContext.current
+    val language = currentLanguage()
     val request = rememberPermissionRequest { if (it == PermissionOutcome.Blocked) context.openAppDetails() }
-    val notice = notice(settings, readiness)
+    val notice = homeNotice(settings, readiness, language)
     val effectiveForwarding = settings.effectiveChannels(readiness).isNotEmpty()
     val targetKinds = settings.channels.ifEmpty { EventKind.entries.toSet() }
     FitHeroLayout(
@@ -216,8 +227,8 @@ fun HomeScreen(
             ) { shown ->
                 val gap = Modifier.padding(bottom = SectionGap)
                 when (shown) {
-                    Notice.Bark -> NoticeBanner(shown, gap, onOpenBark)
-                    is Notice.Denied -> NoticeBanner(shown, gap) { request(shown.kind.permission) }
+                    HomeNotice.Bark -> NoticeBanner(shown, gap, onOpenBark)
+                    is HomeNotice.Permission -> NoticeBanner(shown, gap) { request(shown.group) }
                     null -> Box(Modifier.fillMaxWidth())
                 }
             }
@@ -248,12 +259,8 @@ fun HomeScreen(
 
     if (askingPermission) {
         PermissionSheet(
-            kinds = targetKinds.toList(),
+            prompt = PermissionPrompt.Forwarding(targetKinds.toList()) { onUpdate { it.withForwarding(true) } },
             readiness = readiness,
-            onStart = {
-                onUpdate { it.withForwarding(true) }
-                askingPermission = false
-            },
             onDismiss = { askingPermission = false },
         )
     }
@@ -384,52 +391,43 @@ private fun PowerButton(on: Boolean, onToggle: () -> Unit) {
     }
 }
 
-private class NoticeLook(val icon: ImageVector, @param:StringRes val title: Int, @param:StringRes val summary: Int, @param:StringRes val action: Int)
+private class NoticeLook(
+    val badge: BadgeStyle,
+    @param:StringRes val title: Int,
+    @param:StringRes val summary: Int,
+    @param:StringRes val action: Int,
+)
 
-private val Notice.look: NoticeLook
+private val BarkBadge = BadgeStyle(Icons.Bell, Palette.AmberSurface, Palette.Copper)
+private val BannerPadding = PaddingValues(start = 14.dp, end = 12.dp, top = 8.dp, bottom = 8.dp)
+
+private val HomeNotice.look: NoticeLook
     get() = when (this) {
-        Notice.Bark -> NoticeLook(Icons.Bell, R.string.home_notice_bark, R.string.home_notice_bark_summary, R.string.home_notice_setup)
-        is Notice.Denied -> when (kind) {
-            EventKind.Sms -> NoticeLook(Icons.Sms, R.string.home_notice_sms, R.string.home_notice_sms_summary, R.string.home_notice_grant)
-            EventKind.MissedCall -> NoticeLook(Icons.MissedCall, R.string.home_notice_call, R.string.home_notice_call_summary, R.string.home_notice_grant)
+        HomeNotice.Bark -> NoticeLook(BarkBadge, R.string.home_notice_bark, R.string.home_notice_bark_summary, R.string.home_notice_setup)
+        is HomeNotice.Permission -> {
+            val (title, summary) = when (group) {
+                PermissionGroup.Sms -> R.string.home_notice_sms to R.string.home_notice_sms_summary
+                PermissionGroup.CallLog -> R.string.home_notice_call to R.string.home_notice_call_summary
+                PermissionGroup.Phone -> R.string.home_notice_phone to R.string.home_notice_phone_summary
+                PermissionGroup.Notifications -> R.string.keep_notification to R.string.keep_notification_blocked
+            }
+            NoticeLook(group.look.badge, title, summary, R.string.home_notice_grant)
         }
     }
 
 @Composable
-private fun NoticeBanner(notice: Notice, modifier: Modifier, onClick: () -> Unit) {
+private fun NoticeBanner(notice: HomeNotice, modifier: Modifier, onClick: () -> Unit) {
     val look = notice.look
-    Row(
-        modifier
-            .fillMaxWidth()
-            .glass()
-            .clickable(role = Role.Button, onClick = onClick)
-            .heightIn(min = 56.dp)
-            .padding(start = 14.dp, end = 12.dp, top = 8.dp, bottom = 8.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(12.dp),
-    ) {
-        Box {
-            IconBadge(look.icon, Palette.AmberSurface, Palette.Copper, size = 36.dp, iconSize = 18.dp)
-            Box(
-                Modifier
-                    .align(Alignment.TopEnd)
-                    .size(10.dp)
-                    .clip(CircleShape)
-                    .background(Palette.CopperGlow)
-                    .border(2.dp, Palette.Sheet, CircleShape),
-            )
-        }
-        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(1.dp)) {
-            Text(
-                stringResource(look.title),
-                style = Type.RowTitle,
-                fontWeight = FontWeight.Medium,
-                color = Palette.Ink,
-            )
-            Text(stringResource(look.summary), style = Type.Secondary, color = Palette.Muted)
-        }
-        ActionPillTag(stringResource(look.action))
-    }
+    ActionRow(
+        badge = look.badge,
+        title = stringResource(look.title),
+        subtitle = stringResource(look.summary),
+        action = stringResource(look.action),
+        onAction = onClick,
+        modifier = modifier.glass(),
+        contentPadding = BannerPadding,
+        clickableRow = true,
+    )
 }
 
 @Composable
@@ -478,7 +476,7 @@ private fun RowScope.Breakdown(label: String, count: Long, dot: Color) {
     Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
             Box(Modifier.size(8.dp).clip(CircleShape).background(dot))
-            Text(label, style = Type.Secondary, color = Palette.Muted)
+            Text(label, style = Type.Secondary, color = Palette.Muted, maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
         FitText(count.fitCandidates(), Type.Figure, 12.sp, Palette.Ink)
     }
@@ -499,7 +497,7 @@ private fun RowScope.MetricCard(
             Box(Modifier.size(32.dp).clip(CircleShape).background(iconBackground), contentAlignment = Alignment.Center) {
                 Icon(icon, contentDescription = null, Modifier.size(16.dp), tint = tint)
             }
-            Text(title, style = Type.Label, color = Palette.Ink)
+            Text(title, style = Type.Label, color = Palette.Ink, maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
         Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
             FitText(value, Type.Metric, 16.sp, Palette.Ink, Modifier.alignByBaseline().weight(1f, fill = false))

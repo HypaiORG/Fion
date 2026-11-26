@@ -40,6 +40,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -286,6 +287,13 @@ fun FormCard(
     }
 }
 
+@Immutable
+data class BadgeStyle(
+    val icon: ImageVector,
+    val background: Color = Palette.Neutral,
+    val tint: Color = Palette.Ink,
+)
+
 @Composable
 fun IconBadge(
     icon: ImageVector,
@@ -294,8 +302,32 @@ fun IconBadge(
     shape: Shape = CircleShape,
     size: Dp = 42.dp,
     iconSize: Dp = 20.dp,
+    alert: Boolean = false,
+    modifier: Modifier = Modifier,
 ) {
-    Box(Modifier.size(size).clip(shape).background(background), contentAlignment = Alignment.Center) {
-        Icon(icon, contentDescription = null, Modifier.size(iconSize), tint = tint)
+    Box(modifier) {
+        Box(Modifier.size(size).clip(shape).background(background), contentAlignment = Alignment.Center) {
+            Icon(icon, contentDescription = null, Modifier.size(iconSize), tint = tint)
+        }
+        if (alert) {
+            Box(
+                Modifier
+                    .align(Alignment.TopEnd)
+                    .size(10.dp)
+                    .clip(CircleShape)
+                    .background(Palette.CopperGlow)
+                    .border(2.dp, Palette.Sheet, CircleShape),
+            )
+        }
     }
 }
+
+@Composable
+fun IconBadge(
+    style: BadgeStyle,
+    shape: Shape = CircleShape,
+    size: Dp = 42.dp,
+    iconSize: Dp = 20.dp,
+    alert: Boolean = false,
+    modifier: Modifier = Modifier,
+) = IconBadge(style.icon, style.background, style.tint, shape, size, iconSize, alert, modifier)

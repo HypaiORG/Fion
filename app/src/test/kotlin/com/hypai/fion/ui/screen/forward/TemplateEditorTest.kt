@@ -3,34 +3,69 @@ package com.hypai.fion.ui.screen.forward
 import androidx.compose.ui.graphics.Color
 import com.hypai.fion.forward.EventKind
 import com.hypai.fion.forward.Language
-import com.hypai.fion.forward.TemplateToken
+import com.hypai.fion.forward.PermissionGroup
+import com.hypai.fion.forward.TemplatePart
 import com.hypai.fion.forward.TemplateVariable
-import com.hypai.fion.forward.findTemplateTokens
 import com.hypai.fion.forward.templateVariables
 import kotlin.math.pow
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class TemplateEditorTest {
+    private val smsFrom = encodeVariableToken(TemplateVariable.SmsFrom)
+    private val smsTime = encodeVariableToken(TemplateVariable.SmsTime)
+    private val simNumber = encodeVariableToken(TemplateVariable.SimNumber)
+
     @Test
-    fun `chip placements localize labels and map raw offsets accurately`() {
-        val raw = "SMS · {sender}/{time}"
-        val placements = computeChipPlacements(raw, Language.En, EventKind.Sms)
+    fun `encode and decode round trip structured parts while keeping literal braces as text`() {
+        val parts = listOf(
+            TemplatePart.Text("SMS · {sms.from} "),
+            TemplatePart.Var(TemplateVariable.SmsFrom),
+            TemplatePart.Text("/"),
+            TemplatePart.Var(TemplateVariable.SimNumber),
+        )
+
+        val buffer = encodeTemplateParts(parts)
+        assertEquals(parts, decodeTemplateParts(buffer, EventKind.Sms))
+        assertEquals(listOf(TemplatePart.Text("plain {sms.from} {sim.number}")), decodeTemplateParts("plain {sms.from} {sim.number}", EventKind.Sms))
+    }
+
+    @Test
+    fun `chip placements localize labels mark missing permissions and map raw offsets`() {
+        val raw = "SMS · $smsFrom/$simNumber"
+        val placements = computeChipPlacements(raw, Language.En, EventKind.Sms, isGranted = { it != PermissionGroup.Phone })
 
         assertEquals(2, placements.size)
-        assertEquals(TemplateVariable.From, placements[0].token.variable)
-        assertEquals(formatChipText("Sender"), placements[0].renderedText)
-        assertEquals(TemplateVariable.Time, placements[1].token.variable)
-        assertEquals(formatChipText("Date & Time"), placements[1].renderedText)
+        assertEquals(TemplateVariable.SmsFrom, placements[0].token.variable)
+        assertFalse(placements[0].missingPermission)
+        assertNull(placements[0].warningSlotIndex)
+        assertEquals(formatChipText("Sender", missingPermission = false), placements[0].renderedText)
+
+        assertEquals(TemplateVariable.SimNumber, placements[1].token.variable)
+        assertTrue(placements[1].missingPermission)
+        assertNotNull(placements[1].warningSlotIndex)
+        assertEquals(formatChipText("SIM Number", missingPermission = true), placements[1].renderedText)
 
         assertEquals(0, rawOffsetToVisual(0, placements))
         assertEquals(6, rawOffsetToVisual(6, placements))
-        assertEquals(placements[0].visualEnd, rawOffsetToVisual(14, placements))
-        assertEquals(placements[0].visualEnd + 1, rawOffsetToVisual(15, placements))
+        assertEquals(placements[0].visualEnd, rawOffsetToVisual(6 + smsFrom.length, placements))
+        assertEquals(placements[0].visualEnd + 1, rawOffsetToVisual(6 + smsFrom.length + 1, placements))
         assertEquals(placements[1].visualEnd, rawOffsetToVisual(raw.length, placements))
+    }
+
+    @Test
+    fun `findBufferTokens ignores variables inapplicable to the current event kind`() {
+        val buffer = "${encodeVariableToken(TemplateVariable.CallCount)}$smsFrom"
+
+        val smsTokens = findBufferTokens(buffer, EventKind.Sms)
+        assertEquals(listOf(TemplateVariable.SmsFrom), smsTokens.map { it.variable })
+
+        val callTokens = findBufferTokens(buffer, EventKind.MissedCall)
+        assertEquals(listOf(TemplateVariable.CallCount), callTokens.map { it.variable })
     }
 
     @Test
@@ -44,66 +79,67 @@ class TemplateEditorTest {
             BufferChange(8, 9, 8, 8),
             diffSingleChange("{sender}}", "{sender}", oldSelectionMin = 9, newSelectionMin = 8),
         )
-        assertEquals(
-            BufferChange(2, 12, 2, 3),
-            diffSingleChange("{sender}-{time}", "{sXme}", oldSelectionMin = 2, newSelectionMin = 3),
-        )
     }
 
     @Test
     fun `backspace and forward delete remove entire token atomically`() {
-        val original = "短信 · {sender}"
-        val tokens = findTemplateTokens(original)
+        val original = "短信 · $smsFrom"
+        val tokens = findBufferTokens(original, EventKind.Sms)
 
-        val backspaceChange = diffSingleChange(original, "短信 · {sender", 13, 12)!!
-        assertEquals("短信 · ", applyFixes("短信 · {sender", computeAtomicEditFixes(tokens, backspaceChange)))
+        val backspaced = original.dropLast(1)
+        val backspaceChange = diffSingleChange(original, backspaced, original.length, backspaced.length)!!
+        assertEquals("短信 · ", applyFixes(backspaced, computeAtomicEditFixes(tokens, backspaceChange)))
 
-        val forwardChange = diffSingleChange(original, "短信 · sender}", 5, 5)!!
-        assertEquals("短信 · ", applyFixes("短信 · sender}", computeAtomicEditFixes(tokens, forwardChange)))
+        val forwardDeleted = original.removeRange(5, 6)
+        val forwardChange = diffSingleChange(original, forwardDeleted, 5, 5)!!
+        assertEquals("短信 · ", applyFixes(forwardDeleted, computeAtomicEditFixes(tokens, forwardChange)))
     }
 
     @Test
     fun `partial selection across two chips cleans both touched tokens`() {
-        val original = "{sender}-{time}"
-        val tokens = findTemplateTokens(original)
-        val change = diffSingleChange(original, "{sXme}", 2, 3)!!
+        val original = "$smsFrom-$smsTime"
+        val tokens = findBufferTokens(original, EventKind.Sms)
+        val replaced = original.substring(0, 2) + "X" + original.substring(original.length - 3)
+        val change = diffSingleChange(original, replaced, 2, 3)!!
 
-        assertEquals("X", applyFixes("{sXme}", computeAtomicEditFixes(tokens, change)))
+        assertEquals("X", applyFixes(replaced, computeAtomicEditFixes(tokens, change)))
     }
 
     @Test
     fun `typing adjacent to a chip leaves token intact and interior insert relocates outside`() {
-        val original = "ab{sender}cd"
-        val tokens = findTemplateTokens(original)
+        val original = "ab${smsFrom}cd"
+        val tokens = findBufferTokens(original, EventKind.Sms)
 
-        assertTrue(computeAtomicEditFixes(tokens, diffSingleChange(original, "abX{sender}cd", 2, 3)!!).isEmpty())
-        assertTrue(computeAtomicEditFixes(tokens, diffSingleChange(original, "ab{sender}Xcd", 10, 11)!!).isEmpty())
+        assertTrue(computeAtomicEditFixes(tokens, diffSingleChange(original, "abX${smsFrom}cd", 2, 3)!!).isEmpty())
+        val afterPos = 2 + smsFrom.length
+        assertTrue(computeAtomicEditFixes(tokens, diffSingleChange(original, "ab${smsFrom}Xcd", afterPos, afterPos + 1)!!).isEmpty())
 
-        val interiorChange = diffSingleChange(original, "ab{sXender}cd", 4, 5)!!
-        assertEquals("ab{sender}Xcd", applyFixes("ab{sXender}cd", computeAtomicEditFixes(tokens, interiorChange)))
+        val interior = original.substring(0, 4) + "X" + original.substring(4)
+        val interiorChange = diffSingleChange(original, interior, 4, 5)!!
+        assertEquals("ab${smsFrom}Xcd", applyFixes(interior, computeAtomicEditFixes(tokens, interiorChange)))
     }
 
     @Test
     fun `slash trigger activates only on single slash insertion and derives filtered items`() {
         val vars = EventKind.Sms.templateVariables()
-        val trigger = detectNewSlashTrigger("短信 ", "短信 /", 4, 4)
+        val trigger = detectNewSlashTrigger("短信 ", "短信 /", 4, 4, EventKind.Sms)
         assertEquals(VariablePickerTarget.Insert(3, 4), trigger)
-        assertNull(detectNewSlashTrigger("短信", "短信/a", 4, 4))
+        assertNull(detectNewSlashTrigger("短信", "短信/a", 4, 4, EventKind.Sms))
 
-        val filteredTarget = resolveSlashTarget(trigger!!, "短信 /sim", 7, 7, false, vars, EventKind.Sms)
+        val filteredTarget = resolveSlashTarget(trigger!!, "短信 /sim", 7, 7, false, vars)
         assertEquals(VariablePickerTarget.Insert(3, 7), filteredTarget)
         assertEquals(
-            listOf(TemplateVariable.SimName, TemplateVariable.Number),
-            pickerItemsForTarget(filteredTarget!!, "短信 /sim", vars, EventKind.Sms),
+            listOf(TemplateVariable.SimCarrier, TemplateVariable.SimName, TemplateVariable.SimNumber),
+            pickerItemsForTarget(filteredTarget!!, "短信 /sim", vars),
         )
 
-        val duringComposition = resolveSlashTarget(trigger, "短信 /shijian", 11, 11, true, vars, EventKind.Sms)
+        val duringComposition = resolveSlashTarget(trigger, "短信 /shijian", 11, 11, true, vars)
         assertEquals(VariablePickerTarget.Insert(3, 11), duringComposition)
-        assertEquals(vars, pickerItemsForTarget(duringComposition!!, "短信 /shijian", vars, EventKind.Sms))
+        assertEquals(vars, pickerItemsForTarget(duringComposition!!, "短信 /shijian", vars))
 
-        assertNull(resolveSlashTarget(trigger, "短信 /zzz", 7, 7, false, vars, EventKind.Sms))
-        assertNull(resolveSlashTarget(trigger, "短信 / ", 5, 5, false, vars, EventKind.Sms))
-        assertNull(resolveSlashTarget(trigger, "短信 ", 3, 3, false, vars, EventKind.Sms))
+        assertNull(resolveSlashTarget(trigger, "短信 /zzz", 7, 7, false, vars))
+        assertNull(resolveSlashTarget(trigger, "短信 / ", 5, 5, false, vars))
+        assertNull(resolveSlashTarget(trigger, "短信 ", 3, 3, false, vars))
     }
 
     @Test
@@ -130,14 +166,19 @@ class TemplateEditorTest {
     }
 
     @Test
-    fun `every variable has a distinct chip color with readable contrast`() {
-        val colors = TemplateVariable.entries.map { it.chipColor() }
-
-        assertEquals(TemplateVariable.entries.size, colors.map { it.accent }.toSet().size)
-        for ((variable, chip) in TemplateVariable.entries.zip(colors)) {
+    fun `variables within each kind have distinct chip colors and readable contrast`() {
+        for (kind in EventKind.entries) {
+            val vars = kind.templateVariables()
+            val colors = vars.map { it.chipColor() }
+            assertEquals(vars.size, colors.map { it.accent }.toSet().size)
+        }
+        for (variable in TemplateVariable.entries) {
+            val chip = variable.chipColor()
             val ratio = contrastRatio(chip.foreground, chip.background)
             assertTrue("Contrast $ratio too low for $variable", ratio >= 5.0)
         }
+        val missingRatio = contrastRatio(MissingChipColor.foreground, MissingChipColor.background)
+        assertTrue("Contrast $missingRatio too low for MissingChipColor", missingRatio >= 5.0)
     }
 
     private fun applyFixes(buffer: String, fixes: List<BufferFix>): String {

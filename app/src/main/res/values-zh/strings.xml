@@ -21,6 +21,8 @@
     <string name="home_notice_sms_summary">授权后才能转发新短信</string>
     <string name="home_notice_call">未开启通话记录权限</string>
     <string name="home_notice_call_summary">授权后才能转发未接来电</string>
+    <string name="home_notice_phone">未开启电话权限</string>
+    <string name="home_notice_phone_summary">授权后才能读取 SIM 信息</string>
     <string name="home_notice_setup">去配置</string>
     <string name="home_notice_grant">去授权</string>
     <string name="home_total">累计转发</string>
@@ -124,8 +126,9 @@
     <string name="perm_sheet_call_title">转发未接来电前需要授权</string>
     <string name="perm_sheet_sms_use">仅接收新短信，不读收件箱</string>
     <string name="perm_sheet_call_use">仅识别未接来电，忽略已接</string>
+    <string name="perm_sheet_var_title">使用「%1$s」前需要授权</string>
+    <string name="perm_sheet_var_subtitle">需要授予对应权限才可以使用这个变量</string>
     <string name="perm_sheet_note">仅发往你设置的 Bark 服务器，绝不传第三方</string>
-    <string name="perm_sheet_start">开始转发</string>
 
     <string name="keep_grant">授权</string>
     <string name="keep_sms">接收新短信</string>

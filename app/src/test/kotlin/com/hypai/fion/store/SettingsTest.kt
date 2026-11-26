@@ -4,6 +4,8 @@ import com.hypai.fion.bark.BarkLevel
 import com.hypai.fion.forward.EventKind
 import com.hypai.fion.forward.Language
 import com.hypai.fion.forward.Template
+import com.hypai.fion.forward.TemplatePart
+import com.hypai.fion.forward.TemplateVariable
 import com.hypai.fion.forward.defaultTemplate
 import com.hypai.fion.forward.groupChoice
 import com.hypai.fion.forward.resolve
@@ -91,16 +93,20 @@ class SettingsTest {
     @Test
     fun `typing back any default template restores the default`() {
         val kind = EventKind.MissedCall
+        val custom = Template(listOf(TemplatePart.Text("T")), listOf(TemplatePart.Text("B")))
 
         assertEquals(TemplateChoice.Default, kind.templateChoice(kind.defaultTemplate(Language.En)))
         assertEquals(TemplateChoice.Default, kind.templateChoice(kind.defaultTemplate(Language.Zh)))
-        assertEquals(TemplateChoice.Custom(Template("T", "B")), kind.templateChoice(Template("T", "B")))
+        assertEquals(TemplateChoice.Custom(custom), kind.templateChoice(custom))
     }
 
     @Test
     fun `a custom template survives a language switch`() {
         val kind = EventKind.MissedCall
-        val custom = Template("T {sender}", "B")
+        val custom = Template(
+            title = listOf(TemplatePart.Text("T "), TemplatePart.Var(TemplateVariable.CallFrom)),
+            body = listOf(TemplatePart.Text("B")),
+        )
         val choice = Settings().withPush(kind, kind.defaultProfile.copy(template = kind.templateChoice(custom))).push(kind).template
 
         assertEquals(listOf(custom, custom), Language.entries.map { choice.resolve(kind, it) })
@@ -147,7 +153,14 @@ class SettingsTest {
     @Test
     fun `settings round trip through json and store only customized choices`() {
         val custom = Settings()
-            .withPush(EventKind.Sms, EventKind.Sms.defaultProfile.copy(template = TemplateChoice.Custom(Template("T", "B"))))
+            .withPush(
+                EventKind.Sms,
+                EventKind.Sms.defaultProfile.copy(
+                    template = TemplateChoice.Custom(
+                        Template(listOf(TemplatePart.Text("T")), listOf(TemplatePart.Var(TemplateVariable.SmsContent))),
+                    ),
+                ),
+            )
             .withPush(EventKind.MissedCall, EventKind.MissedCall.defaultProfile.copy(group = GroupChoice.Custom("")))
 
         assertEquals(custom, Json.decodeFromString(Settings.serializer(), Json.encodeToString(Settings.serializer(), custom)))

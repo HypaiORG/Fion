@@ -16,21 +16,18 @@ import android.provider.Settings
 import com.hypai.fion.R
 import com.hypai.fion.forward.EventKind
 import com.hypai.fion.forward.Language
+import com.hypai.fion.forward.PermissionGroup
+import com.hypai.fion.forward.permission
 
 fun Context.isGranted(permission: String): Boolean =
     checkSelfPermission(permission) == PackageManager.PERMISSION_GRANTED
 
-enum class PermissionGroup(vararg val permissions: String) {
-    Sms(Manifest.permission.RECEIVE_SMS),
-    CallLog(Manifest.permission.READ_CALL_LOG),
-    Phone(Manifest.permission.READ_PHONE_STATE, Manifest.permission.READ_PHONE_NUMBERS),
-    Notifications(Manifest.permission.POST_NOTIFICATIONS),
-}
-
-val EventKind.permission: PermissionGroup
+val PermissionGroup.permissions: Array<String>
     get() = when (this) {
-        EventKind.Sms -> PermissionGroup.Sms
-        EventKind.MissedCall -> PermissionGroup.CallLog
+        PermissionGroup.Sms -> arrayOf(Manifest.permission.RECEIVE_SMS)
+        PermissionGroup.CallLog -> arrayOf(Manifest.permission.READ_CALL_LOG)
+        PermissionGroup.Phone -> arrayOf(Manifest.permission.READ_PHONE_STATE, Manifest.permission.READ_PHONE_NUMBERS)
+        PermissionGroup.Notifications -> arrayOf(Manifest.permission.POST_NOTIFICATIONS)
     }
 
 fun Context.isGranted(group: PermissionGroup): Boolean = group.permissions.all(::isGranted)
@@ -45,10 +42,14 @@ data class Readiness(
     val batteryUnrestricted: Boolean,
     val notifications: Boolean,
 ) {
-    fun allows(kind: EventKind): Boolean = when (kind) {
-        EventKind.Sms -> sms
-        EventKind.MissedCall -> callLog
+    fun allows(group: PermissionGroup): Boolean = when (group) {
+        PermissionGroup.Sms -> sms
+        PermissionGroup.CallLog -> callLog
+        PermissionGroup.Phone -> phone
+        PermissionGroup.Notifications -> notifications
     }
+
+    fun allows(kind: EventKind): Boolean = allows(kind.permission)
 
     fun keepAliveNotice(persistentNotification: Boolean): Boolean = notifications && persistentNotification
 

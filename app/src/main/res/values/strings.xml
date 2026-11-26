@@ -12,17 +12,19 @@
     <string name="unknown_sim">Unknown SIM</string>
     <string name="service_channel">Forwarding status</string>
     <string name="service_title">Forwarding is active</string>
-    <string name="service_text">New SMS and missed calls forward to Bark</string>
+    <string name="service_text">Forwards SMS &amp; missed calls</string>
 
     <string name="home_power">Forwarding switch</string>
     <string name="home_power_on">Forwarding is active</string>
     <string name="home_power_off">Forwarding is paused</string>
     <string name="home_notice_bark">Set up Bark</string>
-    <string name="home_notice_bark_summary">Add your server to start</string>
+    <string name="home_notice_bark_summary">Add your Bark server</string>
     <string name="home_notice_sms">Allow SMS access</string>
-    <string name="home_notice_sms_summary">Needed to forward new SMS</string>
+    <string name="home_notice_sms_summary">Needed to forward SMS</string>
     <string name="home_notice_call">Allow call log</string>
     <string name="home_notice_call_summary">Needed for missed calls</string>
+    <string name="home_notice_phone">Allow phone access</string>
+    <string name="home_notice_phone_summary">Needed for SIM info</string>
     <string name="home_notice_setup">Set up</string>
     <string name="home_notice_grant">Allow</string>
     <string name="home_total">Total forwarded</string>
@@ -94,10 +96,10 @@
     <string name="forward_call_title">Missed call forwarding</string>
     <string name="forward_sms_switch">Forward SMS</string>
     <string name="forward_call_switch">Forward missed calls</string>
-    <string name="forward_sms_on">Auto-forwards new SMS to Bark</string>
+    <string name="forward_sms_on">Auto-forwards new SMS</string>
     <string name="forward_call_on">Auto-forwards missed calls</string>
-    <string name="forward_sms_paused">Paused, allow SMS to resume</string>
-    <string name="forward_call_paused">Paused, allow call log to resume</string>
+    <string name="forward_sms_paused">Paused, allow SMS access</string>
+    <string name="forward_call_paused">Paused, allow call log</string>
     <string name="forward_off">Off, nothing will be pushed</string>
     <string name="forward_template">Push template</string>
     <string name="forward_template_title">Title</string>
@@ -125,15 +127,16 @@
 
     <string name="perm_sheet_title">Allow access to start</string>
     <string name="perm_sheet_sms_title">Allow SMS to forward</string>
-    <string name="perm_sheet_call_title">Allow call log to forward</string>
-    <string name="perm_sheet_sms_use">Forwards new SMS, skips inbox</string>
-    <string name="perm_sheet_call_use">Missed calls only, skips others</string>
+    <string name="perm_sheet_call_title">Allow call log access</string>
+    <string name="perm_sheet_sms_use">New SMS only, no inbox</string>
+    <string name="perm_sheet_call_use">Missed calls only, no log</string>
+    <string name="perm_sheet_var_title">Allow %1$s</string>
+    <string name="perm_sheet_var_subtitle">Grant permission to use this variable</string>
     <string name="perm_sheet_note">Sent only to your Bark server, never shared</string>
-    <string name="perm_sheet_start">Start forwarding</string>
 
     <string name="keep_grant">Allow</string>
     <string name="keep_sms">Receive new SMS</string>
-    <string name="keep_sms_summary">New SMS only, skips inbox</string>
+    <string name="keep_sms_summary">New SMS only, no inbox</string>
     <string name="keep_call_log">Read call log</string>
     <string name="keep_call_log_summary">Missed calls only, no log</string>
     <string name="keep_phone">Read SIM info</string>
@@ -142,8 +145,8 @@
     <string name="keep_battery_summary">Keeps running in sleep</string>
     <string name="keep_open_settings">Open</string>
     <string name="keep_notification">Ongoing notification</string>
-    <string name="keep_notification_blocked">Allow notifications first</string>
-    <string name="keep_notification_on">Shows status to stay active</string>
+    <string name="keep_notification_blocked">Allow notifications</string>
+    <string name="keep_notification_on">Keeps forwarding active</string>
     <string name="keep_notification_off">Off, system may pause it</string>
     <string name="keep_allow">Allow</string>
     <string name="keep_ready">Ready</string>
@@ -181,7 +184,7 @@
     <string name="onb_open_settings">Open system settings</string>
 
     <string name="privacy_hero_title">Your privacy in one picture</string>
-    <string name="privacy_hero_desc">Direct to your Bark. No Fion server. No history.</string>
+    <string name="privacy_hero_desc">Direct to Bark. No Fion server. No history.</string>
     <string name="privacy_flow_phone">Your phone</string>
     <string name="privacy_flow_phone_sub">New only</string>
     <string name="privacy_flow_aes_on">HTTPS + AES</string>
@@ -246,34 +249,34 @@
     <string name="privacy_server_desc">No Fion server. You choose where pushes go.</string>
     <string name="privacy_server_official_title">Default Bark</string>
     <string name="privacy_server_official_sub">api.day.app</string>
-    <string name="privacy_server_official_note">Official, ready to use</string>
+    <string name="privacy_server_official_note">Official, ready now</string>
     <string name="privacy_server_cf_tag">Full control</string>
     <string name="privacy_server_cf_title">Cloudflare</string>
     <string name="privacy_server_cf_sub">Private self-host</string>
-    <string name="privacy_server_cf_note">Free; full ownership</string>
+    <string name="privacy_server_cf_note">Free, you own it</string>
     <string name="privacy_server_chain_phone">Your phone</string>
     <string name="privacy_server_chain_cf">Your Cloudflare</string>
     <string name="privacy_server_chain_device">Your device</string>
     <string name="privacy_server_chain_desc">Self-hosted path: from your phone directly through your Cloudflare server to your device.</string>
-    <string name="privacy_server_tip">Self-host on Cloudflare and add AES below to control every step yourself.</string>
+    <string name="privacy_server_tip">Self-host on Cloudflare + AES for full control.</string>
 
     <string name="privacy_aes_title">Lock secrets before leaving</string>
     <string name="privacy_aes_badge_on">Encrypted · %1$s</string>
     <string name="privacy_aes_badge_off">AES lock off</string>
-    <string name="privacy_aes_desc">AES scrambles your text locally so no server can read it.</string>
+    <string name="privacy_aes_desc">Locks text locally so no server can read it.</string>
     <string name="privacy_aes_mode_locked">With AES lock</string>
     <string name="privacy_aes_mode_plain">Without AES</string>
     <string name="privacy_aes_sample_label">SMS on your phone</string>
-    <string name="privacy_aes_sample_body">[Bank] Code 839201, valid for 5 min</string>
+    <string name="privacy_aes_sample_body">[Bank] Code 839201 (5 min)</string>
     <string name="privacy_aes_step_locked">AES key + random IV on phone</string>
     <string name="privacy_aes_step_plain">HTTPS only, no AES content lock</string>
     <string name="privacy_aes_out_locked_label">Scrambled packet (unreadable)</string>
     <string name="privacy_aes_out_locked_code">device_key: \"aB3x…\" (routing)\nid: \"9f4c…\" (dedup)\nciphertext: \"k8mQ7x2pL4vR9nB3cT6wY…\"</string>
-    <string name="privacy_aes_out_locked_hint">Only Device Key &amp; ID route it; only your Bark can unlock it.</string>
+    <string name="privacy_aes_out_locked_hint">Routed by key &amp; ID; only your Bark unlocks it.</string>
     <string name="privacy_aes_out_plain_label">Plain packet (readable by server)</string>
-    <string name="privacy_aes_out_plain_code">device_key: \"aB3x…\"\nbody: \"[Bank] Code 839201, valid for 5 min\"</string>
-    <string name="privacy_aes_out_plain_hint">HTTPS protects transit. Add AES or Cloudflare for full privacy.</string>
-    <string name="privacy_aes_setting_hint">Configure server &amp; AES in Settings › Bark push settings</string>
+    <string name="privacy_aes_out_plain_code">device_key: \"aB3x…\"\nbody: \"[Bank] Code 839201 (5 min)\"</string>
+    <string name="privacy_aes_out_plain_hint">HTTPS only. Add AES or Cloudflare for privacy.</string>
+    <string name="privacy_aes_setting_hint">Set up in Settings › Bark push settings</string>
 
     <string name="privacy_storage_title">Only 3 things stay on phone</string>
     <string name="privacy_storage_config_title">Your settings &amp; keys</string>

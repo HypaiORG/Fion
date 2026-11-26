@@ -6,6 +6,14 @@ import kotlinx.serialization.Serializable
 @Serializable
 enum class EventKind { Sms, MissedCall }
 
+enum class PermissionGroup { Sms, CallLog, Phone, Notifications }
+
+val EventKind.permission: PermissionGroup
+    get() = when (this) {
+        EventKind.Sms -> PermissionGroup.Sms
+        EventKind.MissedCall -> PermissionGroup.CallLog
+    }
+
 @Serializable
 @JvmInline
 value class SimKey private constructor(val value: String) {

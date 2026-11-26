@@ -63,14 +63,17 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
+import androidx.compose.ui.graphics.drawscope.translate
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.graphics.toArgb
+import androidx.compose.ui.graphics.vector.rememberVectorPainter
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.pointerInput
@@ -101,13 +104,15 @@ import androidx.compose.ui.window.Popup
 import androidx.compose.ui.window.PopupPositionProvider
 import androidx.compose.ui.window.PopupProperties
 import com.hypai.fion.R
+import com.hypai.fion.android.Readiness
 import com.hypai.fion.forward.EventKind
 import com.hypai.fion.forward.Language
-import com.hypai.fion.forward.TemplateToken
+import com.hypai.fion.forward.PermissionGroup
+import com.hypai.fion.forward.TemplatePart
 import com.hypai.fion.forward.TemplateVariable
-import com.hypai.fion.forward.findTemplateTokens
 import com.hypai.fion.forward.templateVariables
 import com.hypai.fion.ui.design.FormFieldFrame
+import com.hypai.fion.ui.design.Icons
 import com.hypai.fion.ui.design.Motion
 import com.hypai.fion.ui.design.Palette
 import com.hypai.fion.ui.design.Type
@@ -124,15 +129,22 @@ internal data class VariableChipColor(
 
 private val ChipInk = Color(0xFF111827)
 
+internal val MissingChipColor = VariableChipColor(
+    accent = Palette.Outline,
+    background = Color(0xFFEEEFF2),
+    foreground = Palette.Muted,
+    border = Color(0xFFD0D5DD),
+)
+
 private val VariableChipColors: List<VariableChipColor> = TemplateVariable.entries.map { variable ->
     val accent = when (variable) {
-        TemplateVariable.From -> Color(0xFF6E4CC2)
-        TemplateVariable.Content -> Color(0xFFD1455F)
+        TemplateVariable.SmsFrom, TemplateVariable.CallFrom -> Color(0xFF6E4CC2)
+        TemplateVariable.SmsContent -> Color(0xFFD1455F)
         TemplateVariable.CallCount -> Color(0xFFC9443A)
-        TemplateVariable.Time -> Color(0xFFB8760B)
-        TemplateVariable.Carrier -> Color(0xFF0F8B8D)
+        TemplateVariable.SmsTime, TemplateVariable.CallTime -> Color(0xFFB8760B)
+        TemplateVariable.SimCarrier -> Color(0xFF0F8B8D)
         TemplateVariable.SimName -> Color(0xFF238653)
-        TemplateVariable.Number -> Color(0xFF1D6FD8)
+        TemplateVariable.SimNumber -> Color(0xFF1D6FD8)
     }
     VariableChipColor(
         accent = accent,
@@ -164,15 +176,18 @@ private val TemplateTextStyle = TextStyle(
 private data class DrawnChip(
     val placement: ChipPlacement,
     val rects: List<Rect>,
+    val warningRect: Rect?,
 )
 
 @Composable
 internal fun TemplateField(
-    value: String,
-    onValueChange: (String) -> Unit,
+    value: List<TemplatePart>,
+    onValueChange: (List<TemplatePart>) -> Unit,
     label: String,
     kind: EventKind,
     language: Language,
+    readiness: Readiness,
+    onMissingPermission: (TemplateVariable) -> Unit,
     modifier: Modifier = Modifier,
     hint: String? = null,
     lines: Int = 1,
@@ -180,7 +195,8 @@ internal fun TemplateField(
 ) {
     val singleLine = lines == 1
     val variables = remember(kind) { kind.templateVariables() }
-    val textState = rememberTextFieldState(initialText = value)
+    val initialBuffer = remember { encodeTemplateParts(value) }
+    val textState = rememberTextFieldState(initialText = initialBuffer)
     val scrollState = rememberScrollState()
     val interaction = remember { MutableInteractionSource() }
     val focused by interaction.collectIsFocusedAsState()
@@ -188,19 +204,22 @@ internal fun TemplateField(
     val density = LocalDensity.current
     val insetPx = with(density) { ChipVerticalInset.toPx() }
 
-    var lastObservedText by remember { mutableStateOf(value) }
+    var lastObservedText by remember { mutableStateOf(initialBuffer) }
     var lastExternalValue by remember { mutableStateOf(value) }
     var pickerTarget by remember { mutableStateOf<VariablePickerTarget?>(null) }
     var pickerScrollOffset by remember { mutableFloatStateOf(0f) }
     var textLayoutResult by remember { mutableStateOf<TextLayoutResult?>(null) }
     var textBoxOriginInWindow by remember { mutableStateOf(Offset.Zero) }
 
-    val placements by remember(language, kind) {
-        derivedStateOf { computeChipPlacements(textState.text.toString(), language, kind) }
+    val placements by remember(language, kind, readiness.sms, readiness.callLog, readiness.phone) {
+        derivedStateOf { computeChipPlacements(textState.text.toString(), language, kind, readiness::allows) }
     }
     val drawnChips = remember(textLayoutResult, placements, insetPx) {
         val layout = textLayoutResult ?: return@remember emptyList()
-        placements.map { placement -> DrawnChip(placement, chipRects(layout, placement, insetPx)) }
+        placements.map { placement ->
+            val rects = chipRects(layout, placement, insetPx)
+            DrawnChip(placement, rects, warningRect(layout, placement, rects.firstOrNull()))
+        }
     }
 
     val latestOnValueChange by rememberUpdatedState(onValueChange)
@@ -211,10 +230,11 @@ internal fun TemplateField(
     LaunchedEffect(value) {
         if (value == lastExternalValue) return@LaunchedEffect
         lastExternalValue = value
-        if (textState.text.toString() != value) {
-            lastObservedText = value
+        val encoded = encodeTemplateParts(value)
+        if (textState.text.toString() != encoded) {
+            lastObservedText = encoded
             pickerTarget = null
-            textState.setTextAndPlaceCursorAtEnd(value)
+            textState.setTextAndPlaceCursorAtEnd(encoded)
         }
     }
 
@@ -241,8 +261,9 @@ internal fun TemplateField(
             val textChanged = currentText != prevText
             if (textChanged) {
                 lastObservedText = currentText
-                lastExternalValue = currentText
-                latestOnValueChange(currentText)
+                val decoded = decodeTemplateParts(currentText, latestKind)
+                lastExternalValue = decoded
+                latestOnValueChange(decoded)
             }
 
             val currentPicker = pickerTarget
@@ -256,9 +277,8 @@ internal fun TemplateField(
                     selectionEnd = selection.end,
                     hasComposition = hasComposition,
                     variables = latestVariables,
-                    kind = latestKind,
                 )
-                textChanged -> detectNewSlashTrigger(prevText, currentText, selection.start, selection.end)?.also {
+                textChanged -> detectNewSlashTrigger(prevText, currentText, selection.start, selection.end, latestKind)?.also {
                     pickerScrollOffset = scrollState.value.toFloat()
                 }
                 else -> null
@@ -266,8 +286,10 @@ internal fun TemplateField(
         }
     }
 
-    val inputTransformation = remember { atomicTokenInputTransformation() }
-    val outputTransformation = remember(language, kind) { chipOutputTransformation(language, kind) }
+    val inputTransformation = remember(kind) { atomicTokenInputTransformation(kind) }
+    val outputTransformation = remember(language, kind, readiness.sms, readiness.callLog, readiness.phone) {
+        chipOutputTransformation(language, kind, readiness::allows)
+    }
     val activeReplaceToken = (pickerTarget as? VariablePickerTarget.Replace)?.token
 
     BackHandler(enabled = pickerTarget != null) { pickerTarget = null }
@@ -310,9 +332,14 @@ internal fun TemplateField(
                             scrollState = scrollState,
                             singleLine = singleLine,
                             onOriginChanged = { textBoxOriginInWindow = it },
-                            onChipTap = { token ->
-                                pickerScrollOffset = scrollState.value.toFloat()
-                                pickerTarget = VariablePickerTarget.Replace(token)
+                            onChipTap = { placement ->
+                                if (placement.missingPermission) {
+                                    pickerTarget = null
+                                    onMissingPermission(placement.token.variable)
+                                } else {
+                                    pickerScrollOffset = scrollState.value.toFloat()
+                                    pickerTarget = VariablePickerTarget.Replace(placement.token)
+                                }
                             },
                             innerTextField = innerTextField,
                         )
@@ -333,8 +360,8 @@ internal fun TemplateField(
         val currentTarget = pickerTarget
         val currentLayout = textLayoutResult
         if (currentTarget != null && currentLayout != null) {
-            val items = remember(currentTarget, lastObservedText, variables, kind) {
-                pickerItemsForTarget(currentTarget, lastObservedText, variables, kind)
+            val items = remember(currentTarget, lastObservedText, variables) {
+                pickerItemsForTarget(currentTarget, lastObservedText, variables)
             }
             val anchor = remember(
                 currentTarget,
@@ -359,11 +386,11 @@ internal fun TemplateField(
                 VariablePickerPopup(
                     items = items,
                     activeVariable = activeReplaceToken?.variable,
+                    isGranted = readiness::allows,
                     language = language,
-                    kind = kind,
                     anchor = anchor,
                     onSelect = { variable ->
-                        val replacement = variable.token
+                        val replacement = encodeVariableToken(variable)
                         val (rawStart, rawEnd) = when (currentTarget) {
                             is VariablePickerTarget.Insert -> currentTarget.slashStart to currentTarget.replaceEnd
                             is VariablePickerTarget.Replace -> currentTarget.token.start to currentTarget.token.end
@@ -377,6 +404,10 @@ internal fun TemplateField(
                         }
                         haptics.performHapticFeedback(HapticFeedbackType.SegmentTick)
                     },
+                    onMissingPermission = { variable ->
+                        pickerTarget = null
+                        onMissingPermission(variable)
+                    },
                     onDismiss = { pickerTarget = null },
                 )
             }
@@ -384,8 +415,8 @@ internal fun TemplateField(
     }
 }
 
-private fun atomicTokenInputTransformation(): InputTransformation = InputTransformation {
-    val originalTokens = findTemplateTokens(originalText.toString())
+private fun atomicTokenInputTransformation(kind: EventKind): InputTransformation = InputTransformation {
+    val originalTokens = findBufferTokens(originalText.toString(), kind)
     if (originalTokens.isEmpty()) return@InputTransformation
     val change = diffSingleChange(
         old = originalText,
@@ -413,14 +444,19 @@ private fun atomicTokenInputTransformation(): InputTransformation = InputTransfo
     }
 }
 
-private fun chipOutputTransformation(language: Language, kind: EventKind): OutputTransformation = OutputTransformation {
-    for (placement in computeChipPlacements(asCharSequence().toString(), language, kind)) {
+private fun chipOutputTransformation(
+    language: Language,
+    kind: EventKind,
+    isGranted: (PermissionGroup) -> Boolean,
+): OutputTransformation = OutputTransformation {
+    for (placement in computeChipPlacements(asCharSequence().toString(), language, kind, isGranted)) {
         val rawLen = placement.token.end - placement.token.start
+        val chipColor = if (placement.missingPermission) MissingChipColor else placement.token.variable.chipColor()
         replace(placement.visualStart, placement.visualStart + rawLen, placement.renderedText)
         addStyle(
             SpanStyle(
                 fontSize = ChipFontSize,
-                color = placement.token.variable.chipColor().foreground,
+                color = chipColor.foreground,
                 fontWeight = FontWeight.Medium,
             ),
             start = placement.pillStart,
@@ -432,15 +468,17 @@ private fun chipOutputTransformation(language: Language, kind: EventKind): Outpu
 @Composable
 private fun TemplateTextSurface(
     drawnChips: List<DrawnChip>,
-    activeReplaceToken: TemplateToken?,
+    activeReplaceToken: BufferToken?,
     scrollState: ScrollState,
     singleLine: Boolean,
     onOriginChanged: (Offset) -> Unit,
-    onChipTap: (TemplateToken) -> Unit,
+    onChipTap: (ChipPlacement) -> Unit,
     innerTextField: @Composable () -> Unit,
 ) {
     val latestChips by rememberUpdatedState(drawnChips)
     val latestOnChipTap by rememberUpdatedState(onChipTap)
+    val warningPainter = rememberVectorPainter(Icons.Warning)
+    val warningTint = remember { ColorFilter.tint(Palette.Amber) }
 
     Box(
         Modifier
@@ -453,9 +491,9 @@ private fun TemplateTextSurface(
                 val radius = CornerRadius(ChipCorner.toPx())
                 val borderWidth = 0.75.dp.toPx()
                 val activeBorderWidth = 1.25.dp.toPx()
-                for ((placement, rects) in drawnChips) {
-                    val chipColor = placement.token.variable.chipColor()
-                    val isSelected = placement.token == activeReplaceToken
+                for ((placement, rects, warningRect) in drawnChips) {
+                    val chipColor = if (placement.missingPermission) MissingChipColor else placement.token.variable.chipColor()
+                    val isSelected = !placement.missingPermission && placement.token == activeReplaceToken
                     val stroke = Stroke(if (isSelected) activeBorderWidth else borderWidth)
                     val borderColor = if (isSelected) chipColor.foreground.copy(alpha = 0.55f) else chipColor.border
                     for (rect in rects) {
@@ -463,6 +501,14 @@ private fun TemplateTextSurface(
                         val rectSize = Size(rect.width, rect.height)
                         drawRoundRect(chipColor.background, topLeft, rectSize, radius)
                         drawRoundRect(borderColor, topLeft, rectSize, radius, style = stroke)
+                    }
+                    if (warningRect != null) {
+                        val iconSize = minOf(warningRect.width, warningRect.height) * 0.82f
+                        val iconLeft = warningRect.left + scrollX + (warningRect.width - iconSize) / 2f
+                        val iconTop = warningRect.top + scrollY + (warningRect.height - iconSize) / 2f
+                        translate(iconLeft, iconTop) {
+                            with(warningPainter) { draw(Size(iconSize, iconSize), colorFilter = warningTint) }
+                        }
                     }
                 }
             }
@@ -495,7 +541,7 @@ private fun TemplateTextSurface(
                             if (!change.pressed) {
                                 if (!canceled && change.uptimeMillis - startTime < longPressLimit) {
                                     change.consume()
-                                    latestOnChipTap(hit.token)
+                                    latestOnChipTap(hit)
                                 }
                                 break
                             }
@@ -543,12 +589,21 @@ private fun chipRects(layout: TextLayoutResult, placement: ChipPlacement, insetP
     }
 }
 
+private fun warningRect(layout: TextLayoutResult, placement: ChipPlacement, pillRect: Rect?): Rect? {
+    val slotIndex = placement.warningSlotIndex ?: return null
+    val pill = pillRect ?: return null
+    if (slotIndex < 0 || slotIndex >= layout.layoutInput.text.length) return null
+    val slot = layout.getBoundingBox(slotIndex)
+    if (slot.width <= 0f) return null
+    return Rect(left = slot.left, top = pill.top, right = slot.right, bottom = pill.bottom)
+}
+
 private fun findHitChip(
     drawnChips: List<DrawnChip>,
     point: Offset,
     touchPaddingPx: Float,
 ): ChipPlacement? {
-    for ((placement, rects) in drawnChips) {
+    for ((placement, rects, _) in drawnChips) {
         if (rects.any { rect ->
                 point.x >= rect.left - touchPaddingPx &&
                     point.x <= rect.right + touchPaddingPx &&
@@ -594,10 +649,11 @@ private fun computeAnchorInWindow(
 private fun VariablePickerPopup(
     items: List<TemplateVariable>,
     activeVariable: TemplateVariable?,
+    isGranted: (PermissionGroup) -> Boolean,
     language: Language,
-    kind: EventKind,
     anchor: PopupAnchor,
     onSelect: (TemplateVariable) -> Unit,
+    onMissingPermission: (TemplateVariable) -> Unit,
     onDismiss: () -> Unit,
 ) {
     val density = LocalDensity.current
@@ -699,7 +755,8 @@ private fun VariablePickerPopup(
                 verticalArrangement = Arrangement.spacedBy(2.dp),
             ) {
                 items.forEach { variable ->
-                    val selected = variable == activeVariable
+                    val missing = !isGranted(variable.permission)
+                    val selected = !missing && variable == activeVariable
                     val chipColors = variable.chipColor()
                     Row(
                         Modifier
@@ -707,19 +764,30 @@ private fun VariablePickerPopup(
                             .height(34.dp)
                             .clip(PickerRowShape)
                             .background(if (selected) chipColors.background else Color.Transparent)
-                            .clickable(role = Role.Button) { onSelect(variable) }
+                            .clickable(role = Role.Button) {
+                                if (missing) onMissingPermission(variable) else onSelect(variable)
+                            }
                             .padding(horizontal = 10.dp),
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(9.dp),
                     ) {
-                        Box(Modifier.size(8.dp).clip(CircleShape).background(chipColors.accent))
+                        Box(
+                            Modifier
+                                .size(8.dp)
+                                .clip(CircleShape)
+                                .background(if (missing) Palette.Outline.copy(alpha = 0.45f) else chipColors.accent),
+                        )
                         Text(
-                            text = variable.displayName(language, kind),
+                            text = variable.displayName(language),
                             style = Type.Label.copy(
                                 fontSize = ChipFontSize,
                                 fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Medium,
                             ),
-                            color = if (selected) chipColors.foreground else Palette.Ink,
+                            color = when {
+                                missing -> Palette.Muted.copy(alpha = 0.62f)
+                                selected -> chipColors.foreground
+                                else -> Palette.Ink
+                            },
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis,
                         )

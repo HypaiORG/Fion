@@ -140,7 +140,7 @@ fun SettingsScreen(
                         profile.sound,
                         stringResource(profile.level.labelRes),
                     ),
-                    leading = { IconBadge(look.icon, look.background, look.tint) },
+                    leading = { IconBadge(look.badge) },
                     trailing = { Chevron() },
                     onClick = { onOpen(Screen.Forward(kind)) },
                 )

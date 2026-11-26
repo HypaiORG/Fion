@@ -37,6 +37,7 @@ import com.hypai.fion.bark.BARK_SOUNDS
 import com.hypai.fion.bark.BarkLevel
 import com.hypai.fion.forward.EventKind
 import com.hypai.fion.forward.Template
+import com.hypai.fion.forward.TemplateVariable
 import com.hypai.fion.forward.groupChoice
 import com.hypai.fion.forward.resolve
 import com.hypai.fion.forward.templateChoice
@@ -59,6 +60,7 @@ import com.hypai.fion.ui.design.SegmentedChoice
 import com.hypai.fion.ui.design.SheetButton
 import com.hypai.fion.ui.design.Type
 import com.hypai.fion.ui.design.rememberDraft
+import com.hypai.fion.ui.screen.PermissionPrompt
 import com.hypai.fion.ui.screen.PermissionSheet
 
 @get:StringRes
@@ -101,6 +103,7 @@ fun ForwardScreen(
     val edit = form::edit
     var pickingSound by rememberSaveable { mutableStateOf(false) }
     var askingPermission by rememberSaveable { mutableStateOf(false) }
+    var missingVariable by rememberSaveable { mutableStateOf<TemplateVariable?>(null) }
     val language = currentLanguage()
     val template = draft.template.resolve(kind, language)
     val editTemplate: (Template) -> Unit = { edit(draft.copy(template = kind.templateChoice(it))) }
@@ -149,6 +152,8 @@ fun ForwardScreen(
                 label = stringResource(R.string.forward_template_title),
                 kind = kind,
                 language = language,
+                readiness = readiness,
+                onMissingPermission = { missingVariable = it },
                 keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next),
             )
             TemplateField(
@@ -157,6 +162,8 @@ fun ForwardScreen(
                 label = stringResource(R.string.forward_template_body),
                 kind = kind,
                 language = language,
+                readiness = readiness,
+                onMissingPermission = { missingVariable = it },
                 lines = 4,
                 hint = stringResource(R.string.forward_template_hint),
             )
@@ -197,16 +204,15 @@ fun ForwardScreen(
         )
     }
 
-    if (askingPermission) {
-        PermissionSheet(
-            kinds = listOf(kind),
-            readiness = readiness,
-            onStart = {
-                onEnabledChange(true)
-                askingPermission = false
-            },
-            onDismiss = { askingPermission = false },
-        )
+    val prompt = when {
+        askingPermission -> PermissionPrompt.Forwarding(listOf(kind)) { onEnabledChange(true) }
+        else -> missingVariable?.let(PermissionPrompt::Variable)
+    }
+    if (prompt != null) {
+        PermissionSheet(prompt, readiness) {
+            askingPermission = false
+            missingVariable = null
+        }
     }
 }
 
