@@ -27,7 +27,6 @@
     <string name="home_notice_phone">未开启电话权限</string>
     <string name="home_notice_phone_summary">授权后才能读取 SIM 信息</string>
     <string name="home_notice_setup">去配置</string>
-    <string name="home_notice_grant">去授权</string>
     <string name="home_total">累计转发</string>
     <plurals name="home_total_unit">
         <item quantity="other">条</item>
@@ -130,7 +129,7 @@
     <string name="perm_sheet_var_subtitle">需要授予对应权限才可以使用这个变量</string>
     <string name="perm_sheet_note">仅发往你设置的 Bark 服务器，绝不传第三方</string>
 
-    <string name="keep_grant">授权</string>
+    <string name="grant">授权</string>
     <string name="keep_sms">接收新短信</string>
     <string name="keep_sms_summary">仅转发新短信，不读收件箱</string>
     <string name="keep_call_log">读取通话记录</string>
@@ -144,7 +143,6 @@
     <string name="keep_notification_blocked">需先开启通知权限</string>
     <string name="keep_notification_on">显示运行状态，防止后台中断</string>
     <string name="keep_notification_off">已关闭，后台可能被系统停止</string>
-    <string name="keep_allow">允许</string>
     <string name="keep_ready">已就绪</string>
     <string name="keep_all_ready">全部就绪</string>
     <string name="keep_remaining">还差 %d 项</string>

@@ -24,6 +24,7 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.selection.toggleable
@@ -203,18 +204,22 @@ fun PrimaryButton(text: String, modifier: Modifier = Modifier, onClick: () -> Un
     }
 }
 
+private val ControlWidth = 52.dp
+private val ControlHeight = 32.dp
+
 @Composable
 fun ActionPill(text: String, modifier: Modifier = Modifier, onClick: (() -> Unit)? = null) {
     Box(
         modifier
-            .height(36.dp)
+            .height(ControlHeight)
+            .widthIn(min = ControlWidth)
             .clip(CircleShape)
             .background(Palette.NavySurface)
             .then(if (onClick != null) Modifier.clickable(role = Role.Button, onClick = onClick) else Modifier)
-            .padding(horizontal = 16.dp),
+            .padding(horizontal = 4.dp),
         contentAlignment = Alignment.Center,
     ) {
-        Text(text, style = Type.Label, fontWeight = FontWeight.SemiBold, color = Palette.NavyDeep, maxLines = 1)
+        Text(text, style = Type.Secondary, color = Palette.NavyDeep, maxLines = 1)
     }
 }
 
@@ -372,9 +377,18 @@ fun ActionRow(
         if (clickableRow) {
             ActionPill(action)
         } else {
-            AnimatedContent(ready, contentAlignment = Alignment.CenterEnd, transitionSpec = { Motion.Swap }, label = "rowAction") { done ->
-                if (done) Text(stringResource(R.string.keep_enabled), style = Type.Secondary, color = Palette.Navy)
-                else ActionPill(action, onClick = onAction)
+            AnimatedContent(ready, contentAlignment = Alignment.Center, transitionSpec = { Motion.Swap }, label = "rowAction") { done ->
+                if (done) {
+                    Text(
+                        stringResource(R.string.keep_enabled),
+                        Modifier.widthIn(min = ControlWidth),
+                        style = Type.Secondary,
+                        color = Palette.Navy,
+                        textAlign = TextAlign.Center,
+                    )
+                } else {
+                    ActionPill(action, onClick = onAction)
+                }
             }
         }
     }
@@ -420,7 +434,7 @@ private fun AppSwitch(checked: Boolean) {
     val checkTint = remember { ColorFilter.tint(Palette.Navy) }
     Box(
         Modifier
-            .size(52.dp, 32.dp)
+            .size(ControlWidth, ControlHeight)
             .drawBehind {
                 val radius = size.height / 2f
                 drawRoundRect(trackColor, cornerRadius = CornerRadius(radius))

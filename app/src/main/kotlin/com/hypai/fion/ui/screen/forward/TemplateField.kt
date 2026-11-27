@@ -301,7 +301,7 @@ internal fun TemplateField(
     }
     val activeReplaceToken = (pickerTarget as? VariablePickerTarget.Replace)?.token
     val pickerLabel = stringResource(R.string.forward_variable_picker)
-    val grantLabel = stringResource(R.string.keep_grant)
+    val grantLabel = stringResource(R.string.grant)
 
     BackHandler(enabled = pickerTarget != null) { pickerTarget = null }
 

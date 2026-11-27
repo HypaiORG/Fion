@@ -29,7 +29,6 @@
     <string name="home_notice_phone">Allow phone access</string>
     <string name="home_notice_phone_summary">Needed for SIM info</string>
     <string name="home_notice_setup">Set up</string>
-    <string name="home_notice_grant">Allow</string>
     <string name="home_total">Total forwarded</string>
     <plurals name="home_total_unit">
         <item quantity="one">message</item>
@@ -134,7 +133,7 @@
     <string name="perm_sheet_var_subtitle">Grant permission to use this variable</string>
     <string name="perm_sheet_note">Sent only to your Bark server, never shared</string>
 
-    <string name="keep_grant">Allow</string>
+    <string name="grant">Allow</string>
     <string name="keep_sms">Receive new SMS</string>
     <string name="keep_sms_summary">New SMS only, no inbox</string>
     <string name="keep_call_log">Read call log</string>
@@ -148,7 +147,6 @@
     <string name="keep_notification_blocked">Allow notifications</string>
     <string name="keep_notification_on">Keeps forwarding active</string>
     <string name="keep_notification_off">Off, system may pause it</string>
-    <string name="keep_allow">Allow</string>
     <string name="keep_ready">Ready</string>
     <string name="keep_all_ready">All set</string>
     <string name="keep_remaining">%d left</string>

@@ -470,7 +470,7 @@ private val HomeNotice.look: NoticeLook
                 PermissionGroup.Phone -> R.string.home_notice_phone to R.string.home_notice_phone_summary
                 PermissionGroup.Notifications -> R.string.keep_notification to R.string.keep_notification_blocked
             }
-            NoticeLook(group.look.badge, title, summary, R.string.home_notice_grant)
+            NoticeLook(group.look.badge, title, summary, R.string.grant)
         }
     }
 

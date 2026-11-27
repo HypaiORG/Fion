@@ -152,7 +152,7 @@ fun PermissionSheet(prompt: PermissionPrompt, readiness: Readiness, onDismiss: (
                 badge = look.badge,
                 title = stringResource(look.title),
                 subtitle = stringResource(look.summary),
-                action = stringResource(R.string.keep_grant),
+                action = stringResource(R.string.grant),
                 onAction = { request(group) },
                 contentPadding = SheetRowPadding,
                 ready = readiness.allows(group),

@@ -76,7 +76,7 @@ fun KeepAliveScreen(
         title = group.look.title,
         subtitle = summary,
         ready = readiness.allows(group),
-        control = Control.Fix(R.string.keep_grant) { request(group) },
+        control = Control.Fix(R.string.grant) { request(group) },
     )
 
     val permissions = listOf(
@@ -101,7 +101,7 @@ fun KeepAliveScreen(
         },
         ready = readiness.keepAliveNotice(persistentNotification),
         control = if (readiness.notifications) Control.Toggle(persistentNotification, onPersistentNotificationChange)
-        else Control.Fix(R.string.keep_allow) { request(PermissionGroup.Notifications) },
+        else Control.Fix(R.string.grant) { request(PermissionGroup.Notifications) },
     )
     val all = permissions + battery + notification
     val done = all.count { it.ready }

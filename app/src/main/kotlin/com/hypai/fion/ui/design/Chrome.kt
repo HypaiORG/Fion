@@ -250,7 +250,10 @@ private fun FullscreenOverlay(
     Dialog(onDismissRequest = { startClose(latestDismiss) }, properties = FullscreenDialogProperties) {
         val view = LocalView.current
         DisposableEffect(view) {
-            (view.parent as? DialogWindowProvider)?.window?.setDimAmount(0f)
+            (view.parent as? DialogWindowProvider)?.window?.run {
+                setDimAmount(0f)
+                setWindowAnimations(0)
+            }
             onDispose {}
         }
         OverlayBackdrop(shown, shown.targetState, { startClose(latestDismiss) }, enter, exit, contentAlignment) {
