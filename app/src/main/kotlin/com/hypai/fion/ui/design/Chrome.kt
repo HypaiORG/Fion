@@ -214,19 +214,32 @@ fun AppSheet(
     subtitle: String,
     onDismiss: () -> Unit,
     actions: (@Composable RowScope.() -> Unit)? = null,
-    content: @Composable ColumnScope.() -> Unit,
+    content: @Composable ColumnScope.(close: (after: () -> Unit) -> Unit) -> Unit,
 ) {
     val host = LocalPaneOverlay.current
     if (host != null) {
-        PaneSheet(host, onDismiss) { SheetBody(title, subtitle, actions, content) }
+        val close: (() -> Unit) -> Unit = { after ->
+            onDismiss()
+            after()
+        }
+        PaneSheet(host, onDismiss) { SheetBody(title, subtitle, actions) { content(close) } }
         return
+    }
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    val scope = rememberCoroutineScope()
+    val close: (() -> Unit) -> Unit = { after ->
+        scope.launch {
+            sheetState.hide()
+            onDismiss()
+            after()
+        }
     }
     ModalBottomSheet(
         onDismissRequest = onDismiss,
-        sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
+        sheetState = sheetState,
         containerColor = Palette.Sheet,
         dragHandle = { SheetHandle() },
-    ) { SheetBody(title, subtitle, actions, content) }
+    ) { SheetBody(title, subtitle, actions) { content(close) } }
 }
 
 @OptIn(ExperimentalMaterial3Api::class)

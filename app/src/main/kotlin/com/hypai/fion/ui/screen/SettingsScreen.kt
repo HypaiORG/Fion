@@ -18,6 +18,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -36,13 +37,13 @@ import com.hypai.fion.BuildConfig
 import com.hypai.fion.R
 import com.hypai.fion.android.PermissionHealth
 import com.hypai.fion.android.Readiness
-import com.hypai.fion.android.applyAppLanguage
 import com.hypai.fion.android.health
 import com.hypai.fion.bark.BarkSettings
 import com.hypai.fion.bark.endpoint
 import com.hypai.fion.forward.EventKind
 import com.hypai.fion.forward.Language
 import com.hypai.fion.store.Settings
+import com.hypai.fion.ui.LocalSwitchLanguage
 import com.hypai.fion.ui.Screen
 import com.hypai.fion.ui.currentLanguage
 import com.hypai.fion.ui.design.AppSheet
@@ -55,7 +56,6 @@ import com.hypai.fion.ui.design.ListRow
 import com.hypai.fion.ui.design.Palette
 import com.hypai.fion.ui.design.RadioOption
 import com.hypai.fion.ui.design.ScreenScaffold
-import com.hypai.fion.ui.design.SheetButton
 import com.hypai.fion.ui.design.SwitchRow
 import com.hypai.fion.ui.design.Type
 import com.hypai.fion.ui.screen.forward.labelRes
@@ -88,6 +88,7 @@ fun SettingsScreen(
     val haptics = LocalHapticFeedback.current
     val uriHandler = LocalUriHandler.current
     val context = LocalContext.current
+    val switchLanguage = LocalSwitchLanguage.current
     val noBrowser = stringResource(R.string.settings_no_browser)
     var confirmReset by rememberSaveable { mutableStateOf(false) }
     var pickingLanguage by rememberSaveable { mutableStateOf(false) }
@@ -231,10 +232,7 @@ fun SettingsScreen(
     if (pickingLanguage) {
         LanguageSheet(
             current = language,
-            onPick = { picked ->
-                pickingLanguage = false
-                if (picked != language) context.applyAppLanguage(picked)
-            },
+            onPick = { picked -> if (picked != language) switchLanguage(picked) },
             onDismiss = { pickingLanguage = false },
         )
     }
@@ -274,19 +272,18 @@ private fun BarkSettings.summary(): String {
 
 @Composable
 private fun LanguageSheet(current: Language, onPick: (Language) -> Unit, onDismiss: () -> Unit) {
-    var selected by rememberSaveable { mutableStateOf(current) }
+    var selected by remember { mutableStateOf(current) }
     AppSheet(
         title = stringResource(R.string.settings_language),
         subtitle = stringResource(R.string.settings_language_summary),
         onDismiss = onDismiss,
-        actions = {
-            SheetButton(stringResource(R.string.cancel), filled = false, onClick = onDismiss)
-            SheetButton(stringResource(R.string.ok), filled = true) { onPick(selected) }
-        },
-    ) {
+    ) { close ->
         Column(Modifier.selectableGroup()) {
             Language.entries.forEach { language ->
-                RadioOption(language.displayName(), selected = language == selected) { selected = language }
+                RadioOption(language.displayName(), selected = language == selected) {
+                    selected = language
+                    close { onPick(language) }
+                }
             }
         }
     }

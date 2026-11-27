@@ -9,16 +9,30 @@ import androidx.activity.enableEdgeToEdge
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.EnterTransition
 import androidx.compose.animation.ExitTransition
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.tween
 import androidx.compose.animation.togetherWith
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.State
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.saveable.SaveableStateHolder
 import androidx.compose.runtime.saveable.rememberSaveableStateHolder
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
+import androidx.compose.runtime.staticCompositionLocalOf
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.graphics.layer.drawLayer
+import androidx.compose.ui.graphics.rememberGraphicsLayer
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.lifecycle.ViewModel
@@ -40,6 +54,7 @@ import androidx.navigation3.ui.NavDisplay
 import com.hypai.fion.AppContainer
 import com.hypai.fion.R
 import com.hypai.fion.android.Readiness
+import com.hypai.fion.android.applyAppLanguage
 import com.hypai.fion.appContainer
 import com.hypai.fion.forward.EventKind
 import com.hypai.fion.forward.Language
@@ -63,6 +78,7 @@ import com.hypai.fion.ui.screen.privacy.PrivacyScreen
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import kotlinx.serialization.Serializable
@@ -125,12 +141,47 @@ class MainActivity : ComponentActivity() {
             navigationBarStyle = SystemBarStyle.light(Color.TRANSPARENT, Color.TRANSPARENT),
         )
         super.onCreate(savedInstanceState)
-        setContent { AppTheme { AppRoot() } }
+        setContent { AppTheme { LanguageCrossfade { AppRoot() } } }
     }
 }
 
 @Composable
 fun currentLanguage(): Language = Language.valueOf(stringResource(R.string.language))
+
+val LocalSwitchLanguage = staticCompositionLocalOf<(Language) -> Unit> { error("LanguageCrossfade is missing") }
+
+@Composable
+private fun LanguageCrossfade(content: @Composable () -> Unit) {
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    val layer = rememberGraphicsLayer()
+    val language by rememberUpdatedState(currentLanguage())
+    var frozen by remember { mutableStateOf<ImageBitmap?>(null) }
+    val fade = remember { Animatable(1f) }
+    val switch: (Language) -> Unit = remember(context, scope, layer) {
+        { target ->
+            scope.launch {
+                frozen = layer.toImageBitmap()
+                fade.snapTo(1f)
+                context.applyAppLanguage(target)
+                snapshotFlow { language }.first { it == target }
+                fade.animateTo(0f, tween(300, easing = Motion.Standard))
+                frozen = null
+            }
+        }
+    }
+    CompositionLocalProvider(LocalSwitchLanguage provides switch) {
+        Box(
+            Modifier
+                .fillMaxSize()
+                .drawWithContent {
+                    layer.record { this@drawWithContent.drawContent() }
+                    drawLayer(layer)
+                    frozen?.let { drawImage(it, alpha = fade.value) }
+                },
+        ) { content() }
+    }
+}
 
 private const val SCREEN_META = "screen"
 
