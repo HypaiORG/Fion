@@ -96,7 +96,7 @@ fun ForwardScreen(
     readiness: Readiness,
     onEnabledChange: (Boolean) -> Unit,
     onChange: (PushProfile) -> Unit,
-    onBack: () -> Unit,
+    onBack: (() -> Unit)?,
 ) {
     val form = rememberDraft(saved, onChange, key = kind)
     val draft = form.value

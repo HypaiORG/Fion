@@ -9,6 +9,7 @@ import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.togetherWith
+import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -24,6 +25,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.layout.displayCutout
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -31,9 +33,10 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.sizeIn
+import androidx.compose.foundation.layout.systemBars
+import androidx.compose.foundation.layout.union
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.rememberScrollState
@@ -44,9 +47,12 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.Text
+import androidx.compose.material3.adaptive.currentWindowAdaptiveInfoV2
+import androidx.compose.material3.adaptive.separatingHorizontalHingeBounds
 import androidx.compose.material3.ripple
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -58,6 +64,7 @@ import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.drawWithCache
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ColorFilter
@@ -66,6 +73,8 @@ import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.graphics.vector.rememberVectorPainter
 import androidx.compose.ui.layout.Layout
+import androidx.compose.ui.layout.onPlaced
+import androidx.compose.ui.layout.positionInWindow
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.res.painterResource
@@ -104,6 +113,7 @@ import com.hypai.fion.ui.design.BadgeStyle
 import com.hypai.fion.ui.design.EnvelopeDecor
 import com.hypai.fion.ui.design.GlassCard
 import com.hypai.fion.ui.design.Icons
+import com.hypai.fion.ui.design.LocalPaneOverlay
 import com.hypai.fion.ui.design.MetalSim
 import com.hypai.fion.ui.design.Motion
 import com.hypai.fion.ui.design.Palette
@@ -118,6 +128,7 @@ import com.hypai.fion.ui.design.toggle
 import java.util.Locale
 import kotlin.math.max
 import kotlin.math.min
+import kotlin.math.roundToInt
 
 private fun Long.grouped(): String = String.format(Locale.US, "%,d", this)
 
@@ -174,7 +185,7 @@ fun HomeScreen(
     stats: Stats,
     readiness: Readiness,
     onUpdate: ((Settings) -> Settings) -> Unit,
-    onOpenSettings: () -> Unit,
+    onOpenSettings: (() -> Unit)?,
     onOpenBark: () -> Unit,
 ) {
     val scroll = rememberScrollState()
@@ -185,20 +196,32 @@ fun HomeScreen(
     val notice = homeNotice(settings, readiness, language)
     val effectiveForwarding = settings.effectiveChannels(readiness).isNotEmpty()
     val targetKinds = settings.channels.ifEmpty { EventKind.entries.toSet() }
+    val horizontalFold = currentWindowAdaptiveInfoV2().windowPosture.separatingHorizontalHingeBounds.firstOrNull()
+    val insetsModifier = if (LocalPaneOverlay.current == null) {
+        Modifier.windowInsetsPadding(WindowInsets.systemBars.union(WindowInsets.displayCutout))
+    } else {
+        Modifier
+    }
     FitHeroLayout(
         Modifier
             .fillMaxSize()
-            .windowInsetsPadding(WindowInsets.safeDrawing)
+            .then(insetsModifier)
             .verticalScroll(scroll, enabled = scroll.maxValue > 0)
             .padding(horizontal = 16.dp)
             .padding(top = 4.dp, bottom = 16.dp),
+        scroll = scroll,
+        fold = horizontalFold,
         top = {
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                 Box(Modifier.size(48.dp), contentAlignment = Alignment.Center) {
                     Icon(painterResource(R.drawable.ic_notification), contentDescription = stringResource(R.string.app_name), Modifier.size(30.dp), tint = Palette.Ink)
                 }
                 Box(Modifier.weight(1f))
-                IconButton(onClick = onOpenSettings) { Icon(Icons.Gear, contentDescription = stringResource(R.string.settings_title), tint = Palette.Ink) }
+                if (onOpenSettings != null) {
+                    IconButton(onClick = onOpenSettings) { Icon(Icons.Gear, contentDescription = stringResource(R.string.settings_title), tint = Palette.Ink) }
+                } else {
+                    StatusPill(effectiveForwarding)
+                }
             }
         },
         hero = {
@@ -268,6 +291,28 @@ fun HomeScreen(
     }
 }
 
+@Composable
+private fun StatusPill(on: Boolean) {
+    Row(
+        Modifier
+            .padding(end = 6.dp)
+            .height(28.dp)
+            .clip(CircleShape)
+            .background(if (on) Palette.NavySurface else Palette.Dormant)
+            .padding(horizontal = 12.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(6.dp),
+    ) {
+        Box(Modifier.size(6.dp).clip(CircleShape).background(if (on) Palette.Navy else Palette.Outline))
+        Text(
+            stringResource(if (on) R.string.home_status_on else R.string.home_status_off),
+            style = Type.Secondary,
+            fontWeight = FontWeight.Medium,
+            color = if (on) Palette.NavyDeep else Palette.Muted,
+        )
+    }
+}
+
 private val PowerMax = 208.dp
 private val PowerMin = 108.dp
 private const val POWER_MIDDLE_RATIO = 168f / 208f
@@ -278,17 +323,41 @@ private val SectionGap = 10.dp
 private val CardPadding = PaddingValues(horizontal = 18.dp, vertical = 14.dp)
 private val SimShareMax = 140.dp
 
+internal data class HeroSplit(val heroHeight: Int, val statsY: Int, val totalHeight: Int)
+
+internal fun heroSplit(
+    minHeight: Int,
+    topHeight: Int,
+    statsHeight: Int,
+    minHeroHeight: Int,
+    gap: Int,
+    foldTop: Int? = null,
+    foldBottom: Int? = null,
+): HeroSplit {
+    if (foldTop != null && foldBottom != null && foldTop > topHeight + minHeroHeight + gap && foldBottom < minHeight) {
+        val heroHeight = foldTop - topHeight - gap
+        val statsY = max(foldBottom, minHeight - statsHeight)
+        return HeroSplit(heroHeight, statsY, max(statsY + statsHeight, minHeight))
+    }
+    val heroHeight = max(minHeight - topHeight - statsHeight - 2 * gap, minHeroHeight)
+    val totalHeight = max(topHeight + heroHeight + statsHeight + 2 * gap, minHeight)
+    return HeroSplit(heroHeight, totalHeight - statsHeight, totalHeight)
+}
+
 @Composable
 private fun FitHeroLayout(
     modifier: Modifier,
+    scroll: ScrollState,
+    fold: Rect?,
     top: @Composable () -> Unit,
     hero: @Composable () -> Unit,
     stats: @Composable ColumnScope.() -> Unit,
 ) {
     val statsColumn: @Composable () -> Unit = { Column(verticalArrangement = Arrangement.spacedBy(SectionGap), content = stats) }
+    var originY by remember { mutableIntStateOf(0) }
     Layout(
         contents = listOf(top, hero, statsColumn),
-        modifier = modifier,
+        modifier = modifier.onPlaced { originY = it.positionInWindow().y.roundToInt() + scroll.value },
     ) { (topSlot, heroSlot, statsSlot), constraints ->
         val width = constraints.maxWidth
         val contentWidth = min(width, ContentMaxWidth.roundToPx())
@@ -296,14 +365,21 @@ private fun FitHeroLayout(
         val gap = SectionGap.roundToPx()
         val topBar = topSlot.single().measure(loose)
         val statsBlock = statsSlot.single().measure(loose)
-        val heroHeight = max(constraints.minHeight - topBar.height - statsBlock.height - 2 * gap, PowerMin.roundToPx())
-        val heroBlock = heroSlot.single().measure(Constraints.fixed(contentWidth, heroHeight))
-        val height = max(topBar.height + heroHeight + statsBlock.height + 2 * gap, constraints.minHeight)
+        val split = heroSplit(
+            minHeight = constraints.minHeight,
+            topHeight = topBar.height,
+            statsHeight = statsBlock.height,
+            minHeroHeight = PowerMin.roundToPx(),
+            gap = gap,
+            foldTop = fold?.let { it.top.roundToInt() - originY },
+            foldBottom = fold?.let { it.bottom.roundToInt() - originY },
+        )
+        val heroBlock = heroSlot.single().measure(Constraints.fixed(contentWidth, split.heroHeight))
         val x = (width - contentWidth) / 2
-        layout(width, height) {
+        layout(width, split.totalHeight) {
             topBar.place(x, 0)
             heroBlock.place(x, topBar.height + gap)
-            statsBlock.place(x, height - statsBlock.height)
+            statsBlock.place(x, split.statsY)
         }
     }
 }

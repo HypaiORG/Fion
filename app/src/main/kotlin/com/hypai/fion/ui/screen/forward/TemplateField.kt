@@ -47,6 +47,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
@@ -209,6 +210,7 @@ internal fun TemplateField(
     var pickerScrollOffset by remember { mutableFloatStateOf(0f) }
     var textLayoutResult by remember { mutableStateOf<TextLayoutResult?>(null) }
     var textBoxOriginInWindow by remember { mutableStateOf(Offset.Zero) }
+    var textBoxWidthInWindow by remember { mutableIntStateOf(0) }
 
     val placements by remember(language, kind, readiness.granted) {
         derivedStateOf { computeChipPlacements(textState.text.toString(), language, kind, readiness::allows) }
@@ -330,7 +332,10 @@ internal fun TemplateField(
                             activeReplaceToken = activeReplaceToken,
                             scrollState = scrollState,
                             singleLine = singleLine,
-                            onOriginChanged = { textBoxOriginInWindow = it },
+                            onBoundsChanged = { origin, width ->
+                                textBoxOriginInWindow = origin
+                                textBoxWidthInWindow = width
+                            },
                             onChipTap = { placement ->
                                 if (placement.missingPermission) {
                                     pickerTarget = null
@@ -388,6 +393,8 @@ internal fun TemplateField(
                     isGranted = readiness::allows,
                     language = language,
                     anchor = anchor,
+                    fieldLeft = textBoxOriginInWindow.x.roundToInt(),
+                    fieldWidth = textBoxWidthInWindow,
                     onSelect = { variable ->
                         val replacement = encodeVariableToken(variable)
                         val (rawStart, rawEnd) = when (currentTarget) {
@@ -470,7 +477,7 @@ private fun TemplateTextSurface(
     activeReplaceToken: BufferToken?,
     scrollState: ScrollState,
     singleLine: Boolean,
-    onOriginChanged: (Offset) -> Unit,
+    onBoundsChanged: (Offset, Int) -> Unit,
     onChipTap: (ChipPlacement) -> Unit,
     innerTextField: @Composable () -> Unit,
 ) {
@@ -483,7 +490,7 @@ private fun TemplateTextSurface(
         Modifier
             .fillMaxWidth()
             .clipToBounds()
-            .onGloballyPositioned { coords -> onOriginChanged(coords.positionInWindow()) }
+            .onGloballyPositioned { coords -> onBoundsChanged(coords.positionInWindow(), coords.size.width) }
             .drawBehind {
                 val scrollX = if (singleLine) -scrollState.value.toFloat() else 0f
                 val scrollY = if (!singleLine) -scrollState.value.toFloat() else 0f
@@ -651,6 +658,8 @@ private fun VariablePickerPopup(
     isGranted: (TemplateVariable) -> Boolean,
     language: Language,
     anchor: PopupAnchor,
+    fieldLeft: Int,
+    fieldWidth: Int,
     onSelect: (TemplateVariable) -> Unit,
     onMissingPermission: (TemplateVariable) -> Unit,
     onDismiss: () -> Unit,
@@ -664,9 +673,11 @@ private fun VariablePickerPopup(
     )
 
     val edgeMarginPx = with(density) { 16.dp.roundToPx() }
+    val safeLeft = if (fieldWidth > 0) (fieldLeft - edgeMarginPx * 2).coerceAtLeast(0) else 0
+    val safeRight = if (fieldWidth > 0) (fieldLeft + fieldWidth + edgeMarginPx * 2).coerceAtMost(containerSize.width) else containerSize.width
     val popupWidthPx = minOf(
         with(density) { 144.dp.roundToPx() },
-        (containerSize.width - edgeMarginPx * 2).coerceAtLeast(1),
+        (safeRight - safeLeft - edgeMarginPx * 2).coerceAtLeast(1),
     )
     val spec = computePopupLayout(
         viewport = PopupViewport(
@@ -676,6 +687,8 @@ private fun VariablePickerPopup(
             safeBottom = (containerSize.height - safeBottomInsetPx).coerceAtLeast(safeTopPx),
             edgeMargin = edgeMarginPx,
             anchorGap = with(density) { 8.dp.roundToPx() },
+            safeLeft = safeLeft,
+            safeRight = safeRight,
         ),
         anchor = anchor,
         constraints = PopupConstraints(

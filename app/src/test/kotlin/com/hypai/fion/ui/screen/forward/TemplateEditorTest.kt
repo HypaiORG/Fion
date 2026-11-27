@@ -163,6 +163,38 @@ class TemplateEditorTest {
         val crampedTop = computePopupLayout(viewport, PopupAnchor(left = 100, top = 220, bottom = 280), constraints)
         assertFalse(crampedTop.placeAbove)
         assertEquals(280 + 24, crampedTop.resolveY(measuredHeight = 500))
+
+        val paneClamped = computePopupLayout(
+            viewport = PopupViewport(
+                width = 2208,
+                height = 1840,
+                safeTop = 80,
+                safeBottom = 1760,
+                edgeMargin = 32,
+                anchorGap = 16,
+                safeLeft = 1140,
+                safeRight = 2176,
+            ),
+            anchor = PopupAnchor(left = 1150, top = 600, bottom = 640),
+            constraints = PopupConstraints(width = 300, minHeightCap = 300, maxHeightCap = 500, minAboveHeight = 260),
+        )
+        assertEquals(1172, paneClamped.x)
+
+        val rightEdgeClamped = computePopupLayout(
+            viewport = PopupViewport(
+                width = 2208,
+                height = 1840,
+                safeTop = 80,
+                safeBottom = 1760,
+                edgeMargin = 32,
+                anchorGap = 16,
+                safeLeft = 1140,
+                safeRight = 2176,
+            ),
+            anchor = PopupAnchor(left = 2100, top = 600, bottom = 640),
+            constraints = PopupConstraints(width = 300, minHeightCap = 300, maxHeightCap = 500, minAboveHeight = 260),
+        )
+        assertEquals(1844, rightEdgeClamped.x)
     }
 
     @Test

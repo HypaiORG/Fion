@@ -164,7 +164,7 @@ private val ControlTiles = listOf(
 fun PrivacyScreen(
     settings: Settings,
     readiness: Readiness,
-    onBack: () -> Unit,
+    onBack: (() -> Unit)?,
 ) {
     val cipherLabel = settings.bark.endpoint()?.cipher?.cipherLabel
     val serverHost = settings.bark.displayHost()

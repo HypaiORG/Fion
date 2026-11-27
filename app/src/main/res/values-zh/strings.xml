@@ -3,6 +3,7 @@
     <string name="language">Zh</string>
 
     <string name="back">返回</string>
+    <string name="close">关闭</string>
     <string name="cancel">取消</string>
     <string name="ok">确定</string>
 
@@ -15,6 +16,8 @@
     <string name="home_power">转发总开关</string>
     <string name="home_power_on">转发运行中</string>
     <string name="home_power_off">转发已暂停</string>
+    <string name="home_status_on">运行中</string>
+    <string name="home_status_off">已暂停</string>
     <string name="home_notice_bark">尚未配置 Bark</string>
     <string name="home_notice_bark_summary">配置后即可自动推送消息</string>
     <string name="home_notice_sms">未开启短信权限</string>
@@ -178,6 +181,17 @@
     <string name="onb_step">第 %1$d 步，共 %2$d 步</string>
     <string name="onb_later">稍后再说</string>
     <string name="onb_open_settings">前往系统设置</string>
+    <string name="onb_sms_name">接收新短信</string>
+    <string name="onb_call_name">识别未接来电</string>
+    <string name="onb_phone_name">读取 SIM 卡信息</string>
+    <string name="onb_notify_name">显示通知</string>
+    <string name="onb_battery_name">后台运行</string>
+    <string name="onb_status_allowed">已允许</string>
+    <string name="onb_status_denied">已拒绝</string>
+    <string name="onb_status_skipped">已跳过</string>
+    <string name="onb_status_current">进行中</string>
+    <string name="onb_status_blocked">已永久拒绝</string>
+    <string name="onb_status_pending">待授权</string>
 
     <string name="privacy_hero_title">一图看懂飞鸿如何护隐私</string>
     <string name="privacy_hero_desc">只做你的私人信使：直发你的 Bark，无飞鸿服务器，不翻旧记录。</string>

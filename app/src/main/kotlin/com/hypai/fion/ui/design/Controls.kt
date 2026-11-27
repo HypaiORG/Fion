@@ -26,6 +26,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.text.TextAutoSize
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
@@ -66,6 +67,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.offset
+import androidx.compose.ui.unit.sp
 import com.hypai.fion.R
 
 private val PrimaryButtonBrush = Brush.verticalGradient(listOf(Palette.ButtonTop, Palette.Ink))
@@ -441,7 +443,15 @@ fun <T> SegmentedChoice(options: List<Pair<T, String>>, selected: T, onSelect: (
                     inactiveContainerColor = Color.Transparent,
                     inactiveContentColor = Palette.Ink,
                 ),
-            ) { Text(label, style = Type.Secondary, maxLines = 1) }
+            ) {
+                Text(
+                    label,
+                    style = Type.Secondary,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    autoSize = TextAutoSize.StepBased(minFontSize = 10.sp, maxFontSize = Type.Secondary.fontSize),
+                )
+            }
         }
     }
 }

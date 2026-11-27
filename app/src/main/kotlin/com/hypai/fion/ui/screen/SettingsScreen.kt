@@ -78,10 +78,10 @@ private fun Language.displayName(): String = stringResource(
 fun SettingsScreen(
     settings: Settings,
     readiness: Readiness,
+    onBack: (() -> Unit)?,
     onUpdate: ((Settings) -> Settings) -> Unit,
     onResetStats: () -> Unit,
     onOpen: (Screen) -> Unit,
-    onBack: () -> Unit,
 ) {
     val language = currentLanguage()
     val permissionHealth = readiness.health(settings, language)
@@ -104,7 +104,10 @@ fun SettingsScreen(
     ScreenScaffold(title = stringResource(R.string.settings_title), onBack = onBack) {
         GlassCard(padding = PaddingValues(0.dp)) {
             Row(
-                Modifier.fillMaxWidth().clickable(role = Role.Button) { onOpen(Screen.Bark) }.padding(20.dp),
+                Modifier
+                    .fillMaxWidth()
+                    .clickable(role = Role.Button) { onOpen(Screen.Bark) }
+                    .padding(20.dp),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(16.dp),
             ) {

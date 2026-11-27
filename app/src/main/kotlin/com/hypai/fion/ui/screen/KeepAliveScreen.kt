@@ -67,7 +67,7 @@ fun KeepAliveScreen(
     readiness: Readiness,
     persistentNotification: Boolean,
     onPersistentNotificationChange: (Boolean) -> Unit,
-    onBack: () -> Unit,
+    onBack: (() -> Unit)?,
 ) {
     val context = LocalContext.current
     val request = rememberPermissionRequest { if (it == PermissionOutcome.Blocked) context.openAppDetails() }

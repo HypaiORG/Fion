@@ -5,6 +5,7 @@
     <string name="language_name_zh" translatable="false">简体中文</string>
 
     <string name="back">Back</string>
+    <string name="close">Close</string>
     <string name="cancel">Cancel</string>
     <string name="ok">OK</string>
 
@@ -17,6 +18,8 @@
     <string name="home_power">Forwarding switch</string>
     <string name="home_power_on">Forwarding is active</string>
     <string name="home_power_off">Forwarding is paused</string>
+    <string name="home_status_on">Running</string>
+    <string name="home_status_off">Paused</string>
     <string name="home_notice_bark">Set up Bark</string>
     <string name="home_notice_bark_summary">Add your Bark server</string>
     <string name="home_notice_sms">Allow SMS access</string>
@@ -182,6 +185,17 @@
     <string name="onb_step">Step %1$d of %2$d</string>
     <string name="onb_later">Not now</string>
     <string name="onb_open_settings">Open system settings</string>
+    <string name="onb_sms_name">Receive new SMS</string>
+    <string name="onb_call_name">Detect missed calls</string>
+    <string name="onb_phone_name">Read SIM info</string>
+    <string name="onb_notify_name">Show notifications</string>
+    <string name="onb_battery_name">Run in background</string>
+    <string name="onb_status_allowed">Allowed</string>
+    <string name="onb_status_denied">Denied</string>
+    <string name="onb_status_skipped">Skipped</string>
+    <string name="onb_status_current">In progress</string>
+    <string name="onb_status_blocked">Blocked</string>
+    <string name="onb_status_pending">Pending</string>
 
     <string name="privacy_hero_title">Your privacy in one picture</string>
     <string name="privacy_hero_desc">Direct to Bark. No Fion server. No history.</string>

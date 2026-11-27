@@ -46,7 +46,7 @@ import com.hypai.fion.ui.design.rememberDraft
 private val MonoField = Type.Field.copy(fontFamily = FontFamily.Monospace)
 
 @Composable
-fun BarkScreen(saved: BarkSettings, onChange: (BarkSettings) -> Unit, onBack: () -> Unit) {
+fun BarkScreen(saved: BarkSettings, onChange: (BarkSettings) -> Unit, onBack: (() -> Unit)?) {
     val form = rememberDraft(saved, onChange)
     val draft = form.value
     val edit = form::edit

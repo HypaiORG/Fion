@@ -285,6 +285,8 @@ data class PopupViewport(
     val safeBottom: Int,
     val edgeMargin: Int,
     val anchorGap: Int,
+    val safeLeft: Int = 0,
+    val safeRight: Int = width,
 )
 
 data class PopupAnchor(
@@ -324,8 +326,9 @@ fun computePopupLayout(
     anchor: PopupAnchor,
     constraints: PopupConstraints,
 ): PopupLayoutSpec {
-    val maxX = (viewport.width - constraints.width - viewport.edgeMargin).coerceAtLeast(viewport.edgeMargin)
-    val x = anchor.left.coerceIn(viewport.edgeMargin, maxX)
+    val minX = viewport.safeLeft + viewport.edgeMargin
+    val maxX = (viewport.safeRight - constraints.width - viewport.edgeMargin).coerceAtLeast(minX)
+    val x = anchor.left.coerceIn(minX, maxX)
     val screenCap = (viewport.height * 0.32f).toInt().coerceIn(constraints.minHeightCap, constraints.maxHeightCap)
     val spaceAbove = (anchor.top - viewport.safeTop - viewport.edgeMargin - viewport.anchorGap).coerceAtLeast(0)
     val spaceBelow = (viewport.safeBottom - anchor.bottom - viewport.edgeMargin - viewport.anchorGap).coerceAtLeast(0)

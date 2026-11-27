@@ -63,9 +63,9 @@ private val ArtWidth = 412.dp
 private val ArtHeight = 384.dp
 
 @Composable
-internal fun ArtStage(modifier: Modifier, content: @Composable BoxScope.() -> Unit) {
+internal fun ArtStage(modifier: Modifier, maxScale: Float, content: @Composable BoxScope.() -> Unit) {
     BoxWithConstraints(modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
-        val scale = minOf(1f, maxWidth / ArtWidth, maxHeight / ArtHeight)
+        val scale = minOf(maxScale, maxWidth / ArtWidth, maxHeight / ArtHeight)
         Box(
             Modifier.requiredSize(ArtWidth, ArtHeight).graphicsLayer {
                 scaleX = scale
@@ -101,7 +101,7 @@ private fun Modifier.halo(color: Color, spread: Dp): Modifier = drawWithCache {
     onDrawBehind { drawCircle(glow, outer, size.center) }
 }
 
-private class Radial(
+internal class Radial(
     private val cx: Float,
     private val cy: Float,
     private val reach: Float,
@@ -136,7 +136,7 @@ private val CallBalls = listOf(
     CallBall(286 to 140, 312 to 224, Palette.Navy),
 )
 
-private val NavyOrb = Radial(0.35f, 0.3f, 0.955f, 0f to Palette.NavyLight, 0.45f to Color(0xFF3A5080), 1f to Palette.NavyDeep)
+internal val NavyOrb = Radial(0.35f, 0.3f, 0.955f, 0f to Palette.NavyLight, 0.45f to Color(0xFF3A5080), 1f to Palette.NavyDeep)
 
 @Composable
 private fun Skeleton(width: Dp, alpha: Float, height: Dp = 6.dp) {
