@@ -137,7 +137,7 @@ fun PermissionSheet(prompt: PermissionPrompt, readiness: Readiness, onDismiss: (
             onStart = prompt.onStart
         }
         is PermissionPrompt.Variable -> {
-            items = listOf(prompt.variable.permission to listOf(prompt.variable.requirement))
+            items = listOf(prompt.variable.permission.let { it to it.requirements })
             title = stringResource(R.string.perm_sheet_var_title, prompt.variable.displayName(currentLanguage()))
             subtitle = stringResource(R.string.perm_sheet_var_subtitle)
             onStart = null
