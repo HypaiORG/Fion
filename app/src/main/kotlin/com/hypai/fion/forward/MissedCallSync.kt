@@ -32,9 +32,12 @@ class MissedCallSync(
         )
     }
 
-    suspend fun advanceWatermark() = lock.withLock {
-        val snapshot = reader.read(null, emptySet()) ?: return@withLock
-        persistWatermark(snapshot.maxId)
+    suspend fun track(active: Boolean) = lock.withLock {
+        val watermark = stateStore.snapshot().callLogWatermark
+        when {
+            !active -> if (watermark != null) stateStore.settle { it.copy(callLogWatermark = null) }
+            watermark == null -> reader.read(null, emptySet())?.let { persistWatermark(it.maxId) }
+        }
     }
 
     private suspend fun persistWatermark(maxId: Long) = stateStore.settle { it.withWatermark(maxId) }

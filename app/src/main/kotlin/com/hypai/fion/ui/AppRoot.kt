@@ -60,6 +60,7 @@ import com.hypai.fion.android.applyAppLanguage
 import com.hypai.fion.appContainer
 import com.hypai.fion.forward.EventKind
 import com.hypai.fion.forward.Language
+import com.hypai.fion.liveChannels
 import com.hypai.fion.store.Settings
 import com.hypai.fion.store.Stats
 import com.hypai.fion.ui.design.AppBackground
@@ -413,7 +414,7 @@ private fun Destination(
         )
         is Screen.Forward -> ForwardScreen(
             kind = screen.kind,
-            enabled = current.settings.forwards(screen.kind),
+            enabled = screen.kind in current.settings.liveChannels(current.readiness),
             saved = current.settings.push(screen.kind),
             readiness = current.readiness,
             onEnabledChange = { on -> model.updateSettings { it.withChannel(screen.kind, on) } },

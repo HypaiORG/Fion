@@ -92,7 +92,6 @@
     <string name="bark_encryption_note">Algorithm, mode, and key must match Bark\'s Push Encryption settings so Bark can decrypt messages. Fion generates a random IV for each push automatically.</string>
     <string name="forward_summary_on">On</string>
     <string name="forward_summary_off">Off</string>
-    <string name="forward_summary_paused">Paused</string>
     <string name="forward_summary">%1$s · %2$s · %3$s</string>
 
     <string name="forward_sms_title">SMS forwarding</string>
@@ -101,8 +100,6 @@
     <string name="forward_call_switch">Forward missed calls</string>
     <string name="forward_sms_on">Auto-forwards new SMS</string>
     <string name="forward_call_on">Auto-forwards missed calls</string>
-    <string name="forward_sms_paused">Paused, allow SMS access</string>
-    <string name="forward_call_paused">Paused, allow call log</string>
     <string name="forward_off">Off, nothing will be pushed</string>
     <string name="forward_template">Push template</string>
     <string name="forward_template_title">Title</string>
@@ -236,7 +233,7 @@
     <string name="privacy_perm_call_block_title">Other calls skipped</string>
     <string name="privacy_perm_call_block_sub">No history · No audio</string>
     <string name="privacy_perm_call_purpose">Alerts missed caller &amp; daily count</string>
-    <string name="privacy_perm_call_guard">Skips other calls; no mic access (re-granting may backfill)</string>
+    <string name="privacy_perm_call_guard">Skips other calls; no mic access</string>
 
     <string name="privacy_perm_sim_title">Read SIM info</string>
     <string name="privacy_perm_sim_code">READ_PHONE_STATE · READ_PHONE_NUMBERS</string>

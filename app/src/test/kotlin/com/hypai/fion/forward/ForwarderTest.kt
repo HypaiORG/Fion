@@ -541,7 +541,7 @@ class ForwarderTest {
     }
 
     @Test
-    fun `advanceWatermark updates watermark without forwarding missed calls`() = runTest {
+    fun `tracking baselines the watermark without forwarding and forgets it when inactive`() = runTest {
         stateBacking.updateData { it.copy(callLogWatermark = 10) }
         val transport = ScriptedTransport()
         val sync = MissedCallSync(
@@ -554,8 +554,13 @@ class ForwarderTest {
             forwarder(transport),
         )
 
-        sync.advanceWatermark()
+        sync.track(active = true)
+        assertEquals(10L, stateBacking.value.callLogWatermark)
 
+        sync.track(active = false)
+        assertEquals(null, stateBacking.value.callLogWatermark)
+
+        sync.track(active = true)
         assertEquals(42L, stateBacking.value.callLogWatermark)
         assertTrue(transport.requests.isEmpty())
     }
@@ -669,7 +674,8 @@ class ForwarderTest {
 
         stateBacking.updateData { it.copy(callLogWatermark = 100) }
         val resetSync = MissedCallSync({ _, _ -> CallLogSnapshot(12, emptyList()) }, stateStore, forwarder(ScriptedTransport()))
-        resetSync.advanceWatermark()
+        resetSync.track(active = false)
+        resetSync.track(active = true)
         assertEquals(12L, stateBacking.value.callLogWatermark)
     }
 }

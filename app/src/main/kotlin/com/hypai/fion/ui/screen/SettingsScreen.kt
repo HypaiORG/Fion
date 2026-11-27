@@ -40,6 +40,7 @@ import com.hypai.fion.bark.BarkSettings
 import com.hypai.fion.bark.endpoint
 import com.hypai.fion.forward.EventKind
 import com.hypai.fion.forward.Language
+import com.hypai.fion.liveChannels
 import com.hypai.fion.store.Settings
 import com.hypai.fion.ui.LocalSwitchLanguage
 import com.hypai.fion.ui.Screen
@@ -128,13 +129,13 @@ fun SettingsScreen(
         }
 
         RowsCard {
+            val live = settings.liveChannels(readiness)
             EventKind.entries.forEach { kind ->
                 val profile = settings.push(kind)
                 val look = kind.look
                 val statusRes = when {
-                    !settings.forwards(kind) -> R.string.forward_summary_off
-                    readiness.allows(kind) -> R.string.forward_summary_on
-                    else -> R.string.forward_summary_paused
+                    kind in live -> R.string.forward_summary_on
+                    else -> R.string.forward_summary_off
                 }
                 ListRow(
                     title = stringResource(kind.titleRes),

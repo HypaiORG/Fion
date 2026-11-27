@@ -6,8 +6,6 @@ import androidx.compose.animation.core.tween
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.text.KeyboardOptions
@@ -17,7 +15,6 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.ImeAction
@@ -36,7 +33,6 @@ import com.hypai.fion.forward.templateChoice
 import com.hypai.fion.store.PushProfile
 import com.hypai.fion.store.defaultProfile
 import com.hypai.fion.ui.currentLanguage
-import com.hypai.fion.ui.design.ActionPill
 import com.hypai.fion.ui.design.AppSheet
 import com.hypai.fion.ui.design.BleedSwitchRow
 import com.hypai.fion.ui.design.FormCard
@@ -114,23 +110,13 @@ fun ForwardScreen(
     ) {
         GlassCard(padding = PaddingValues(16.dp), spacing = 10.dp) {
             val granted = readiness.allows(kind)
-            val active = enabled && granted
-            val pausedByPermission = enabled && !granted
             val badge by animateColorAsState(
-                when {
-                    active -> Palette.NavySurface
-                    pausedByPermission -> Palette.AmberSurface
-                    else -> Palette.Dormant
-                },
+                if (enabled) Palette.NavySurface else Palette.Dormant,
                 tween(200),
                 label = "enableBadge",
             )
             val badgeTint by animateColorAsState(
-                when {
-                    active -> Palette.Navy
-                    pausedByPermission -> Palette.Amber
-                    else -> Palette.Outline
-                },
+                if (enabled) Palette.Navy else Palette.Outline,
                 tween(200),
                 label = "enableBadgeTint",
             )
@@ -144,10 +130,6 @@ fun ForwardScreen(
                 subtitle = stringResource(
                     when {
                         !enabled -> R.string.forward_off
-                        !granted -> when (kind) {
-                            EventKind.Sms -> R.string.forward_sms_paused
-                            EventKind.MissedCall -> R.string.forward_call_paused
-                        }
                         kind == EventKind.Sms -> R.string.forward_sms_on
                         else -> R.string.forward_call_on
                     },
@@ -156,17 +138,8 @@ fun ForwardScreen(
                 onCheckedChange = { on -> if (on && !granted) askingPermission = true else onEnabledChange(on) },
                 titleStyle = Type.CardTitle.copy(lineHeight = 24.sp),
                 minHeight = 40.dp,
-                leading = { IconBadge(Icons.Forward, badge, badgeTint, size = 32.dp, iconSize = 16.dp, alert = pausedByPermission) },
+                leading = { IconBadge(Icons.Forward, badge, badgeTint, size = 32.dp, iconSize = 16.dp) },
             )
-            if (pausedByPermission) {
-                Row(
-                    Modifier.fillMaxWidth().padding(start = 42.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.End,
-                ) {
-                    ActionPill(stringResource(R.string.home_notice_grant), onClick = { askingPermission = true })
-                }
-            }
         }
 
         FormCard(Icons.Template, Palette.NavySurface, Palette.Navy, stringResource(R.string.forward_template)) {

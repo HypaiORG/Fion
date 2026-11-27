@@ -63,10 +63,11 @@ data class Settings(
 
     fun forwards(kind: EventKind): Boolean = kind in channels
 
-    fun withChannel(kind: EventKind, on: Boolean): Settings = copy(
-        forwardingEnabled = forwardingEnabled || on,
-        channels = if (on) channels + kind else channels - kind,
-    )
+    fun withChannel(kind: EventKind, on: Boolean): Settings = when {
+        !on -> copy(channels = channels - kind)
+        forwardingEnabled -> copy(channels = channels + kind)
+        else -> copy(forwardingEnabled = true, channels = setOf(kind))
+    }
 
     fun withForwarding(on: Boolean): Settings =
         if (on) copy(forwardingEnabled = true, channels = channels.ifEmpty { EventKind.entries.toSet() })
@@ -90,14 +91,10 @@ class SettingsStore(private val backing: DataStore<Settings>) {
 
     suspend fun snapshot(): Settings = backing.data.first()
 
-    suspend fun update(
-        beforeCommit: suspend (before: Settings, after: Settings) -> Unit = { _, _ -> },
-        transform: (Settings) -> Settings,
-    ): Pair<Settings, Settings> = lock.withLock {
+    suspend fun update(transform: (Settings) -> Settings): Pair<Settings, Settings> = lock.withLock {
         val before = backing.data.first()
         val after = transform(before)
         if (after == before) return@withLock before to after
-        beforeCommit(before, after)
         backing.updateData { after }
         before to after
     }

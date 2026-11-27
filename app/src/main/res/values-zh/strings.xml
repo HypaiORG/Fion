@@ -88,7 +88,6 @@
     <string name="bark_encryption_note">算法、模式和密钥必须与 Bark 的「推送加密」完全一致，否则无法解密。每条推送都会自动附带随机偏移量（IV），无需额外配置。</string>
     <string name="forward_summary_on">已开启</string>
     <string name="forward_summary_off">已关闭</string>
-    <string name="forward_summary_paused">已暂停</string>
     <string name="forward_summary">%1$s · %2$s · %3$s</string>
 
     <string name="forward_sms_title">短信转发</string>
@@ -97,8 +96,6 @@
     <string name="forward_call_switch">开启未接来电转发</string>
     <string name="forward_sms_on">收到新短信时自动推送到 Bark</string>
     <string name="forward_call_on">有未接来电时自动推送到 Bark</string>
-    <string name="forward_sms_paused">已暂停，开启短信权限后恢复</string>
-    <string name="forward_call_paused">已暂停，开启通话记录权限后恢复</string>
     <string name="forward_off">已关闭，不会推送此类消息</string>
     <string name="forward_template">推送模板</string>
     <string name="forward_template_title">推送标题</string>
@@ -232,7 +229,7 @@
     <string name="privacy_perm_call_block_title">已接与拨出全跳过</string>
     <string name="privacy_perm_call_block_sub">不传历史 · 不录音</string>
     <string name="privacy_perm_call_purpose">漏接电话时提醒来电号码和今日次数</string>
-    <string name="privacy_perm_call_guard">跳过已接与拨出，无录音权限（重授权可能补发）</string>
+    <string name="privacy_perm_call_guard">跳过已接与拨出，无录音权限</string>
 
     <string name="privacy_perm_sim_title">读取 SIM 卡信息</string>
     <string name="privacy_perm_sim_code">READ_PHONE_STATE · READ_PHONE_NUMBERS</string>

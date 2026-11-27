@@ -95,9 +95,9 @@ import com.hypai.fion.android.Readiness
 import com.hypai.fion.android.missingGroups
 import com.hypai.fion.android.openAppDetails
 import com.hypai.fion.bark.endpoint
-import com.hypai.fion.effectiveChannels
 import com.hypai.fion.forward.EventKind
 import com.hypai.fion.forward.PermissionGroup
+import com.hypai.fion.liveChannels
 import com.hypai.fion.store.Settings
 import com.hypai.fion.store.Stats
 import com.hypai.fion.ui.design.ActionRow
@@ -189,7 +189,7 @@ fun HomeScreen(
     val context = LocalContext.current
     val request = rememberPermissionRequest { if (it == PermissionOutcome.Blocked) context.openAppDetails() }
     val notice = homeNotice(settings, readiness)
-    val effectiveForwarding = settings.effectiveChannels(readiness).isNotEmpty()
+    val effectiveForwarding = settings.liveChannels(readiness).isNotEmpty()
     val targetKinds = settings.channels.ifEmpty { EventKind.entries.toSet() }
     val insetsModifier = if (LocalPaneOverlay.current == null) {
         Modifier.windowInsetsPadding(WindowInsets.systemBars.union(WindowInsets.displayCutout))

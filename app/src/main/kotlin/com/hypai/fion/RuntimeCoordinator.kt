@@ -15,7 +15,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 
-fun Settings.effectiveChannels(readiness: Readiness): Set<EventKind> =
+fun Settings.liveChannels(readiness: Readiness): Set<EventKind> =
     if (forwarding) channels.filterTo(LinkedHashSet(), readiness::allows) else emptySet()
 
 interface SystemScheduler {
@@ -49,18 +49,7 @@ class RuntimeCoordinator(
         EventKind.MissedCall in activeChannels(settingsStore.snapshot(), stateStore.snapshot(), refreshReadiness())
 
     suspend fun updateSettings(transform: (Settings) -> Settings) {
-        val (before, after) = settingsStore.update(
-            beforeCommit = { prev, next ->
-                val state = stateStore.snapshot()
-                val current = refreshReadiness()
-                if (EventKind.MissedCall !in activeChannels(prev, state, current) &&
-                    EventKind.MissedCall in activeChannels(next, state, current)
-                ) {
-                    missedCalls.advanceWatermark()
-                }
-            },
-            transform = transform,
-        )
+        val (before, after) = settingsStore.update(transform)
         if (before == after) return
         val retryReset = after.bark != before.bark ||
             (!before.forwarding && after.forwarding) ||
@@ -98,6 +87,7 @@ class RuntimeCoordinator(
             val current = refreshReadiness()
             val channels = activeChannels(settings, state, current)
             val watchCallLog = EventKind.MissedCall in channels
+            missedCalls.track(watchCallLog)
             val keepAlive = channels.isNotEmpty() && current.keepAliveNotice(settings.persistentNotification)
             scheduler.reconcileKeepAlive(active = keepAlive, watchCallLog = watchCallLog)
             if (watchCallLog) scheduler.ensureCallLogWatch(runningCallLogJobId) else scheduler.cancelCallLogWatch()

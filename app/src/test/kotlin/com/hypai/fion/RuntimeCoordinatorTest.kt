@@ -168,7 +168,7 @@ class RuntimeCoordinatorTest {
     }
 
     @Test
-    fun `enabling missed call channel advances watermark before committing settings`() = runTest {
+    fun `enabling missed call channel baselines the call log watermark`() = runTest {
         val env = harness(
             initialSettings = configured.withChannel(EventKind.MissedCall, false),
             watermark = 88L,
@@ -182,7 +182,7 @@ class RuntimeCoordinatorTest {
     }
 
     @Test
-    fun `completing onboarding without forwarding permissions preserves intent and pauses runtime`() = runTest {
+    fun `completing onboarding without forwarding permissions keeps intent while nothing is live`() = runTest {
         val env = harness(
             initialState = ForwardState(onboardingDone = false, activatedBootCount = 7),
             initialReadiness = noneReady,
@@ -192,13 +192,13 @@ class RuntimeCoordinatorTest {
 
         assertTrue(env.state.value.onboardingDone)
         assertTrue(env.settings.value.forwarding)
-        assertTrue(env.settings.value.effectiveChannels(noneReady).isEmpty())
+        assertTrue(env.settings.value.liveChannels(noneReady).isEmpty())
         assertEquals(listOf(false to false), env.scheduler.keepAliveCalls)
         assertEquals(1, env.scheduler.callLogCancels)
     }
 
     @Test
-    fun `revoking only enabled channel permission stops keep alive without mutating settings`() = runTest {
+    fun `revoking the only enabled channel permission stops runtime and keeps the user's choice`() = runTest {
         val smsOnly = configured.withChannel(EventKind.MissedCall, false)
         val env = harness(
             initialSettings = smsOnly,
@@ -207,36 +207,56 @@ class RuntimeCoordinatorTest {
 
         env.coordinator.reconcile()
 
-        assertTrue(env.settings.value.forwarding)
+        assertEquals(smsOnly, env.settings.value)
+        assertTrue(smsOnly.liveChannels(env.coordinator.readiness.value).isEmpty())
         assertEquals(listOf(false to false), env.scheduler.keepAliveCalls)
         assertEquals(1, env.scheduler.callLogCancels)
     }
 
     @Test
     fun `revoking call log permission keeps sms keep alive and cancels call log watch`() = runTest {
-        val env = harness(initialReadiness = allReady.copy(granted = allReady.granted - AppPermission.ReadCallLog))
+        val env = harness(
+            initialState = ForwardState(activatedBootCount = 7, callLogWatermark = 30L),
+            initialReadiness = allReady.copy(granted = allReady.granted - AppPermission.ReadCallLog),
+        )
 
         env.coordinator.reconcile()
 
+        assertEquals(null, env.state.value.callLogWatermark)
         assertEquals(listOf(true to false), env.scheduler.keepAliveCalls)
         assertEquals(1, env.scheduler.callLogCancels)
         assertEquals(0, env.scheduler.callLogWatches)
     }
 
     @Test
-    fun `restoring revoked permission resumes forwarding automatically without toggling settings`() = runTest {
-        val env = harness(initialReadiness = noneReady.copy(granted = setOf(AppPermission.Notifications)))
+    fun `restoring a revoked permission resumes forwarding without replaying calls missed meanwhile`() = runTest {
+        val env = harness(
+            initialState = ForwardState(activatedBootCount = 7, callLogWatermark = 30L),
+            initialReadiness = noneReady.copy(granted = setOf(AppPermission.Notifications)),
+            watermark = 99L,
+        )
 
         env.coordinator.reconcile()
-        assertEquals(listOf(false to false), env.scheduler.keepAliveCalls)
-        assertTrue(env.settings.value.forwarding)
+        assertEquals(null, env.state.value.callLogWatermark)
 
         env.setReadiness(allReady)
         env.coordinator.reconcile()
 
         assertEquals(listOf(false to false, true to true), env.scheduler.keepAliveCalls)
         assertEquals(1, env.scheduler.callLogWatches)
-        assertEquals(allReady, env.coordinator.readiness.value)
+        assertEquals(99L, env.state.value.callLogWatermark)
+        assertEquals(configured, env.settings.value)
+    }
+
+    @Test
+    fun `turning one channel on while the master switch is off revives only that channel`() = runTest {
+        val env = harness(initialSettings = configured.withForwarding(false))
+
+        env.coordinator.updateSettings { it.withChannel(EventKind.Sms, true) }
+
+        assertTrue(env.settings.value.forwarding)
+        assertEquals(setOf(EventKind.Sms), env.settings.value.channels)
+        assertEquals(listOf(true to false), env.scheduler.keepAliveCalls)
     }
 
     @Test

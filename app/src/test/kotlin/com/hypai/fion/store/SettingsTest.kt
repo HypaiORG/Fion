@@ -28,11 +28,11 @@ class SettingsTest {
     }
 
     @Test
-    fun `turning on a channel while paused starts forwarding`() {
+    fun `turning on a channel while paused starts forwarding for that channel only`() {
         val settings = Settings(forwardingEnabled = false, channels = smsOnly).withChannel(EventKind.MissedCall, true)
 
         assertTrue(settings.forwarding)
-        assertEquals(all, settings.channels)
+        assertEquals(setOf(EventKind.MissedCall), settings.channels)
     }
 
     @Test
