@@ -7,6 +7,7 @@ import java.time.ZonedDateTime
 import kotlinx.serialization.json.Json
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertSame
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -117,6 +118,21 @@ class TemplateTest {
     }
 
     @Test
+    fun `default templates use the same variables in every language`() {
+        for (kind in EventKind.entries) {
+            val perLanguage = Language.entries.map { kind.defaultTemplate(it).usedVariables(kind) }.toSet()
+            assertEquals(kind.name, 1, perLanguage.size)
+        }
+    }
+
+    @Test
+    fun `normalizeParts keeps an already normalized list instance`() {
+        val parts = listOf(TemplatePart.Text("A "), TemplatePart.Var(TemplateVariable.SmsFrom), TemplatePart.Text(" B"))
+
+        assertSame(parts, normalizeParts(parts))
+    }
+
+    @Test
     fun `normalizeParts merges adjacent text and strips empty segments`() {
         val raw = listOf(
             TemplatePart.Text(""),
@@ -140,9 +156,10 @@ class TemplateTest {
 
     @Test
     fun `template required permissions filter by event kind and stay consistent across languages`() {
+        fun Template.permissionsFor(kind: EventKind) = usedVariables(kind).mapTo(LinkedHashSet()) { it.permission }
         for (kind in EventKind.entries) {
-            val zhPerms = kind.defaultTemplate(Language.Zh).requiredPermissions(kind)
-            val enPerms = kind.defaultTemplate(Language.En).requiredPermissions(kind)
+            val zhPerms = kind.defaultTemplate(Language.Zh).permissionsFor(kind)
+            val enPerms = kind.defaultTemplate(Language.En).permissionsFor(kind)
             assertEquals(zhPerms, enPerms)
             assertTrue(PermissionGroup.Phone in zhPerms)
         }
@@ -151,8 +168,8 @@ class TemplateTest {
             title = listOf(TemplatePart.Var(TemplateVariable.CallCount)),
             body = listOf(TemplatePart.Var(TemplateVariable.SmsContent)),
         )
-        assertEquals(setOf(PermissionGroup.Sms), crossKind.requiredPermissions(EventKind.Sms))
-        assertEquals(setOf(PermissionGroup.CallLog), crossKind.requiredPermissions(EventKind.MissedCall))
+        assertEquals(setOf(PermissionGroup.Sms), crossKind.permissionsFor(EventKind.Sms))
+        assertEquals(setOf(PermissionGroup.CallLog), crossKind.permissionsFor(EventKind.MissedCall))
     }
 
     @Test

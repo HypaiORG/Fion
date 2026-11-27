@@ -10,10 +10,10 @@ import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.withContext
 
 interface Outbox {
-    suspend fun enqueue(messages: List<Message>, maxSize: Int)
+    suspend fun enqueue(messages: List<Message>, maxSize: Int): Int
     suspend fun purgeExpired(cutoffMs: Long): Int
-    suspend fun list(kinds: Set<EventKind>): List<Message>
-    suspend fun remove(id: String)
+    suspend fun next(kinds: Set<EventKind>, skip: Set<String>): Message?
+    suspend fun remove(id: String): Boolean
     suspend fun hasAny(kinds: Set<EventKind> = ALL_KINDS): Boolean
 
     companion object {
@@ -22,7 +22,7 @@ interface Outbox {
 }
 
 class SqliteOutbox(context: Context, name: String = "outbox.db") : Outbox {
-    private val dbHelper = object : SQLiteOpenHelper(context.applicationContext, name, null, 3) {
+    private val dbHelper = object : SQLiteOpenHelper(context.applicationContext, name, null, 5) {
         override fun onConfigure(db: SQLiteDatabase) {
             db.enableWriteAheadLogging()
             db.rawQuery("PRAGMA synchronous=NORMAL", null).close()
@@ -52,9 +52,9 @@ class SqliteOutbox(context: Context, name: String = "outbox.db") : Outbox {
         block(dbHelper.writableDatabase)
     }
 
-    override suspend fun enqueue(messages: List<Message>, maxSize: Int) {
-        if (messages.isEmpty()) return
-        io { db ->
+    override suspend fun enqueue(messages: List<Message>, maxSize: Int): Int {
+        if (messages.isEmpty()) return 0
+        return io { db ->
             db.beginTransaction()
             try {
                 for (m in messages) {
@@ -66,11 +66,13 @@ class SqliteOutbox(context: Context, name: String = "outbox.db") : Outbox {
                     }
                     db.insertWithOnConflict("outbox", null, values, SQLiteDatabase.CONFLICT_IGNORE)
                 }
-                db.execSQL(
-                    "DELETE FROM outbox WHERE seq NOT IN (SELECT seq FROM outbox ORDER BY seq DESC LIMIT ?)",
-                    arrayOf(maxSize),
+                val evicted = db.delete(
+                    "outbox",
+                    "seq NOT IN (SELECT seq FROM outbox ORDER BY seq DESC LIMIT ?)",
+                    arrayOf(maxSize.toString()),
                 )
                 db.setTransactionSuccessful()
+                evicted
             } finally {
                 db.endTransaction()
             }
@@ -81,26 +83,28 @@ class SqliteOutbox(context: Context, name: String = "outbox.db") : Outbox {
         db.delete("outbox", "received_at < ?", arrayOf(cutoffMs.toString()))
     }
 
-    override suspend fun list(kinds: Set<EventKind>): List<Message> {
-        if (kinds.isEmpty()) return emptyList()
-        return io { db ->
-            val placeholders = kinds.joinToString(",") { "?" }
-            val result = mutableListOf<Message>()
-            db.rawQuery(
-                "SELECT payload FROM outbox WHERE kind IN ($placeholders) ORDER BY seq ASC",
-                kinds.map { it.name }.toTypedArray(),
-            ).use { cursor ->
-                while (cursor.moveToNext()) {
-                    result += STORE_JSON.decodeFromString(Message.serializer(), cursor.getString(0))
-                }
-            }
-            result
+    override suspend fun next(kinds: Set<EventKind>, skip: Set<String>): Message? =
+        if (kinds.isEmpty()) null else io { db -> db.oldestReadable(kinds, skip) }
+
+    private tailrec fun SQLiteDatabase.oldestReadable(kinds: Set<EventKind>, skip: Set<String>): Message? {
+        val kindMarks = kinds.joinToString(",") { "?" }
+        val skipClause = if (skip.isEmpty()) "" else " AND id NOT IN (${skip.joinToString(",") { "?" }})"
+        val (id, payload) = rawQuery(
+            "SELECT id, payload FROM outbox WHERE kind IN ($kindMarks)$skipClause ORDER BY seq ASC LIMIT 1",
+            (kinds.map { it.name } + skip).toTypedArray(),
+        ).use { cursor -> if (cursor.moveToFirst()) cursor.getString(0) to cursor.getString(1) else null } ?: return null
+        val message = try {
+            STORE_JSON.decodeFromString(Message.serializer(), payload)
+        } catch (_: IllegalArgumentException) {
+            null
         }
+        if (message != null) return message
+        delete("outbox", "id = ?", arrayOf(id))
+        return oldestReadable(kinds, skip)
     }
 
-    override suspend fun remove(id: String) {
-        io { db -> db.delete("outbox", "id = ?", arrayOf(id)) }
-    }
+    override suspend fun remove(id: String): Boolean =
+        io { db -> db.delete("outbox", "id = ?", arrayOf(id)) > 0 }
 
     override suspend fun hasAny(kinds: Set<EventKind>): Boolean {
         if (kinds.isEmpty()) return false
@@ -112,6 +116,4 @@ class SqliteOutbox(context: Context, name: String = "outbox.db") : Outbox {
             ).use { it.moveToFirst() }
         }
     }
-
-    fun close() = dbHelper.close()
 }

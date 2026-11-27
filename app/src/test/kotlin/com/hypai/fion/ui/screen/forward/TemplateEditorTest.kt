@@ -145,12 +145,12 @@ class TemplateEditorTest {
     @Test
     fun `popup layout stays above cursor within screen height cap and flips only when top is cramped`() {
         val viewport = PopupViewport(
-            width = 1080,
             height = 2400,
             safeTop = 100,
             safeBottom = 1500,
             edgeMargin = 48,
             anchorGap = 24,
+            safeRight = 1080,
         )
         val constraints = PopupConstraints(width = 700, minHeightCap = 420, maxHeightCap = 720, minAboveHeight = 360)
 
@@ -166,7 +166,6 @@ class TemplateEditorTest {
 
         val paneClamped = computePopupLayout(
             viewport = PopupViewport(
-                width = 2208,
                 height = 1840,
                 safeTop = 80,
                 safeBottom = 1760,
@@ -182,7 +181,6 @@ class TemplateEditorTest {
 
         val rightEdgeClamped = computePopupLayout(
             viewport = PopupViewport(
-                width = 2208,
                 height = 1840,
                 safeTop = 80,
                 safeBottom = 1760,
@@ -195,6 +193,20 @@ class TemplateEditorTest {
             constraints = PopupConstraints(width = 300, minHeightCap = 300, maxHeightCap = 500, minAboveHeight = 260),
         )
         assertEquals(1844, rightEdgeClamped.x)
+    }
+
+    @Test
+    fun `replacing selected text with slash activates trigger and stray sentinels are stripped`() {
+        val replaced = detectNewSlashTrigger("hi abc!", "hi /!", 4, 4, EventKind.Sms)
+        assertEquals(VariablePickerTarget.Insert(3, 4), replaced)
+
+        val crossKindBuffer = "SMS ${encodeVariableToken(TemplateVariable.CallCount)} $smsFrom${TOKEN_OPEN}bad${TOKEN_CLOSE}$TOKEN_OPEN"
+        val decoded = decodeTemplateParts(crossKindBuffer, EventKind.Sms)
+        assertEquals(
+            listOf(TemplatePart.Text("SMS  "), TemplatePart.Var(TemplateVariable.SmsFrom)),
+            decoded,
+        )
+        assertFalse(findInvalidSentinelRanges(crossKindBuffer, EventKind.Sms).isEmpty())
     }
 
     @Test

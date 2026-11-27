@@ -10,6 +10,8 @@ import android.content.Context
 import android.provider.CallLog
 import com.hypai.fion.appContainer
 import java.util.concurrent.ConcurrentHashMap
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 
@@ -35,7 +37,7 @@ object ForwardJobs {
             .build()
     }
 
-    fun ensureCallLogWatch(context: Context, runningJobId: Int? = null) {
+    fun ensureCallLogWatch(context: Context, runningJobId: Int?) {
         if (!context.isGranted(Manifest.permission.READ_CALL_LOG)) return
         val scheduler = context.scheduler()
         val idle = CALL_LOG_WATCHES.filter { it != runningJobId }
@@ -82,15 +84,23 @@ class CallLogJobService : JobService() {
     override fun onStartJob(params: JobParameters): Boolean {
         val app = appContainer
         val jobId = params.jobId
-        val job = app.scope.launch {
+        val job = app.scope.launch(start = CoroutineStart.LAZY) {
+            var reschedule = false
+            var cancelled = false
             try {
                 app.coordinator.onCallLogTriggered(jobId)
-                jobFinished(params, false)
+            } catch (e: CancellationException) {
+                cancelled = true
+                throw e
+            } catch (_: Throwable) {
+                reschedule = true
             } finally {
                 running.remove(jobId, coroutineContext[Job])
+                if (!cancelled) jobFinished(params, reschedule)
             }
         }
         running[jobId] = job
+        job.start()
         return true
     }
 
@@ -106,14 +116,23 @@ class RetryJobService : JobService() {
 
     override fun onStartJob(params: JobParameters): Boolean {
         val app = appContainer
-        val job = app.scope.launch {
+        val job = app.scope.launch(start = CoroutineStart.LAZY) {
+            var reschedule = true
+            var cancelled = false
             try {
-                jobFinished(params, !app.forwarder.retryPending())
+                reschedule = !app.forwarder.retryPending()
+            } catch (e: CancellationException) {
+                cancelled = true
+                throw e
+            } catch (_: Throwable) {
+                reschedule = true
             } finally {
                 if (running == coroutineContext[Job]) running = null
+                if (!cancelled) jobFinished(params, reschedule)
             }
         }
         running = job
+        job.start()
         return true
     }
 

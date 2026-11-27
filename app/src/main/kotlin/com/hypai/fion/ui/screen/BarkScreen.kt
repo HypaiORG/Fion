@@ -5,9 +5,6 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -29,17 +26,21 @@ import com.hypai.fion.bark.AesKeySize
 import com.hypai.fion.bark.AesMode
 import com.hypai.fion.bark.BarkField
 import com.hypai.fion.bark.BarkSettings
+import com.hypai.fion.bark.DEFAULT_BARK_SERVER
 import com.hypai.fion.bark.formErrors
 import com.hypai.fion.bark.keyError
 import com.hypai.fion.bark.valueOf
 import com.hypai.fion.bark.withInput
 import com.hypai.fion.ui.design.FormCard
 import com.hypai.fion.ui.design.FormField
+import com.hypai.fion.ui.design.Icon
+import com.hypai.fion.ui.design.IconButton
 import com.hypai.fion.ui.design.Icons
 import com.hypai.fion.ui.design.InfoNote
 import com.hypai.fion.ui.design.Palette
 import com.hypai.fion.ui.design.ScreenScaffold
 import com.hypai.fion.ui.design.SegmentedChoice
+import com.hypai.fion.ui.design.Text
 import com.hypai.fion.ui.design.Type
 import com.hypai.fion.ui.design.rememberDraft
 
@@ -49,12 +50,13 @@ private val MonoField = Type.Field.copy(fontFamily = FontFamily.Monospace)
 fun BarkScreen(saved: BarkSettings, onChange: (BarkSettings) -> Unit, onBack: (() -> Unit)?) {
     val form = rememberDraft(saved, onChange)
     val draft = form.value
-    val edit = form::edit
     val haptics = LocalHapticFeedback.current
     fun input(field: BarkField, text: String) {
-        val next = draft.withInput(field, text)
-        if (next.valueOf(field) != text) haptics.performHapticFeedback(HapticFeedbackType.Confirm)
-        edit(next)
+        form.edit { current ->
+            val next = current.withInput(field, text)
+            if (next.valueOf(field) != text) haptics.performHapticFeedback(HapticFeedbackType.Confirm)
+            next
+        }
     }
     var showDeviceKey by rememberSaveable { mutableStateOf(false) }
     val errors = draft.formErrors()
@@ -73,7 +75,7 @@ fun BarkScreen(saved: BarkSettings, onChange: (BarkSettings) -> Unit, onBack: ((
                 label = stringResource(R.string.bark_endpoint_host),
                 prefix = "https://",
                 isError = errors.invalidServer,
-                hint = if (errors.invalidServer) stringResource(R.string.bark_endpoint_host_error) else null,
+                hint = if (errors.invalidServer) stringResource(R.string.bark_endpoint_host_error, DEFAULT_BARK_SERVER) else null,
                 hintColor = Palette.Error,
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri, imeAction = ImeAction.Next),
             )
@@ -100,7 +102,7 @@ fun BarkScreen(saved: BarkSettings, onChange: (BarkSettings) -> Unit, onBack: ((
         }
 
         FormCard(Icons.Lock, Palette.NavySurface, Palette.Navy, stringResource(R.string.bark_encryption)) {
-            AesFields(draft.aes) { edit(draft.copy(aes = it)) }
+            AesFields(draft.aes) { aes -> form.edit { it.copy(aes = aes) } }
         }
     }
 }
@@ -111,11 +113,11 @@ private fun AesFields(aes: AesConfig, onChange: (AesConfig) -> Unit) {
     val keyError = aes.keyError()
     Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
         Text(stringResource(R.string.bark_algorithm), style = Type.Body, color = Palette.Ink)
-        SegmentedChoice(AesKeySize.entries.map { it to it.label }, aes.keySize) { onChange(aes.copy(keySize = it)) }
+        SegmentedChoice(AesKeySize.entries, aes.keySize, { it.label }) { onChange(aes.copy(keySize = it)) }
     }
     Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
         Text(stringResource(R.string.bark_mode), style = Type.Body, color = Palette.Ink)
-        SegmentedChoice(AesMode.entries.map { it to it.label }, aes.mode) { onChange(aes.copy(mode = it)) }
+        SegmentedChoice(AesMode.entries, aes.mode, { it.label }) { onChange(aes.copy(mode = it)) }
     }
     FormField(
         value = aes.key,

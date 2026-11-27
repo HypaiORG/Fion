@@ -118,6 +118,20 @@ class RuntimeCoordinatorTest {
     }
 
     @Test
+    fun `missing bark endpoint keeps background runtime off until a key is saved`() = runTest {
+        val env = harness(initialSettings = Settings(), watermark = 90L)
+
+        assertFalse(env.coordinator.reconcile())
+        assertEquals(false to false, env.scheduler.keepAliveCalls.last())
+        assertEquals(0, env.scheduler.callLogWatches)
+
+        env.coordinator.updateSettings { it.copy(bark = BarkSettings(deviceKey = "k")) }
+
+        assertEquals(true to true, env.scheduler.keepAliveCalls.last())
+        assertEquals(90L, env.state.value.callLogWatermark)
+    }
+
+    @Test
     fun `boot and foreground reconciliation preserve existing retry backoff`() = runTest {
         val env = harness(
             initialState = ForwardState(activatedBootCount = 7),

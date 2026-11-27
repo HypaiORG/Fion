@@ -50,7 +50,7 @@ object Motion {
 }
 
 @Composable
-fun Modifier.pressScale(interaction: InteractionSource, pressedScale: Float = 0.96f): Modifier {
+fun Modifier.pressScale(interaction: InteractionSource, pressedScale: Float): Modifier {
     val pressed by interaction.collectIsPressedAsState()
     val scale by animateFloatAsState(
         if (pressed) pressedScale else 1f,

@@ -4,7 +4,6 @@ import com.hypai.fion.android.Readiness
 import com.hypai.fion.bark.BarkSettings
 import com.hypai.fion.forward.AppPermission
 import com.hypai.fion.forward.EventKind
-import com.hypai.fion.forward.Language
 import com.hypai.fion.forward.PermissionGroup
 import com.hypai.fion.forward.Template
 import com.hypai.fion.forward.TemplatePart
@@ -26,33 +25,33 @@ class HomeNoticeTest {
     fun `no banner is shown when all channels are disabled`() {
         val disabled = Settings(channels = emptySet(), bark = BarkSettings())
 
-        assertNull(homeNotice(disabled, noneReady, Language.Zh))
-        assertNull(homeNotice(disabled, noneReady, Language.En))
+        assertNull(homeNotice(disabled, noneReady))
+        assertNull(homeNotice(disabled, noneReady))
     }
 
     @Test
     fun `paused master switch still shows banners for enabled channels`() {
         val paused = Settings(forwardingEnabled = false, channels = setOf(EventKind.Sms), bark = BarkSettings())
 
-        assertEquals(HomeNotice.Bark, homeNotice(paused, noneReady, Language.Zh))
+        assertEquals(HomeNotice.Bark, homeNotice(paused, noneReady))
     }
 
     @Test
     fun `banner follows bark then sms then call log then phone priority`() {
         val unset = Settings(bark = BarkSettings())
-        assertEquals(HomeNotice.Bark, homeNotice(unset, noneReady, Language.Zh))
+        assertEquals(HomeNotice.Bark, homeNotice(unset, noneReady))
 
         val readyBark = Settings(bark = barkReady)
-        assertEquals(HomeNotice.Permission(PermissionGroup.Sms), homeNotice(readyBark, noneReady, Language.Zh))
+        assertEquals(HomeNotice.Permission(PermissionGroup.Sms), homeNotice(readyBark, noneReady))
         assertEquals(
             HomeNotice.Permission(PermissionGroup.CallLog),
-            homeNotice(readyBark, noneReady.copy(granted = setOf(AppPermission.ReceiveSms)), Language.Zh),
+            homeNotice(readyBark, noneReady.copy(granted = setOf(AppPermission.ReceiveSms))),
         )
         assertEquals(
             HomeNotice.Permission(PermissionGroup.Phone),
-            homeNotice(readyBark, allReady.copy(granted = allPerms - phonePerms), Language.Zh),
+            homeNotice(readyBark, allReady.copy(granted = allPerms - phonePerms)),
         )
-        assertNull(homeNotice(readyBark, allReady, Language.Zh))
+        assertNull(homeNotice(readyBark, allReady))
     }
 
     @Test
@@ -60,7 +59,7 @@ class HomeNoticeTest {
         val smsOnly = Settings(bark = barkReady, channels = setOf(EventKind.Sms))
         val noCallNoPhone = allReady.copy(granted = allPerms - phonePerms - AppPermission.ReadCallLog)
 
-        assertEquals(HomeNotice.Permission(PermissionGroup.Phone), homeNotice(smsOnly, noCallNoPhone, Language.Zh))
+        assertEquals(HomeNotice.Permission(PermissionGroup.Phone), homeNotice(smsOnly, noCallNoPhone))
 
         val smsWithoutSimVars = smsOnly.withPush(
             EventKind.Sms,
@@ -73,7 +72,7 @@ class HomeNoticeTest {
                 ),
             ),
         )
-        assertNull(homeNotice(smsWithoutSimVars, noCallNoPhone, Language.Zh))
+        assertNull(homeNotice(smsWithoutSimVars, noCallNoPhone))
     }
 
     @Test
@@ -94,7 +93,7 @@ class HomeNoticeTest {
             }
             assertEquals(
                 HomeNotice.Permission(PermissionGroup.Phone),
-                homeNotice(settings, allReady.copy(granted = allPerms - phonePerms - AppPermission.ReceiveSms), Language.En),
+                homeNotice(settings, allReady.copy(granted = allPerms - phonePerms - AppPermission.ReceiveSms)),
             )
         }
     }
@@ -112,7 +111,7 @@ class HomeNoticeTest {
             )
         }
         val stateOnly = allReady.copy(granted = allPerms - AppPermission.ReadPhoneNumbers)
-        assertNull(homeNotice(smsNameOnly, stateOnly, Language.Zh))
+        assertNull(homeNotice(smsNameOnly, stateOnly))
 
         val smsWithNumber = smsNameOnly.withPush(
             EventKind.Sms,
@@ -122,6 +121,6 @@ class HomeNoticeTest {
                 ),
             ),
         )
-        assertEquals(HomeNotice.Permission(PermissionGroup.Phone), homeNotice(smsWithNumber, stateOnly, Language.Zh))
+        assertEquals(HomeNotice.Permission(PermissionGroup.Phone), homeNotice(smsWithNumber, stateOnly))
     }
 }

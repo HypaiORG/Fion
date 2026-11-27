@@ -62,6 +62,13 @@ class ForwarderTest {
     private fun sms(receivedAt: Long = 1_000L) = ForwardEvent.Sms("10086", SimIdentity(SimKey.subscription(1), 0, "A", "主卡", ""), receivedAt, receivedAt, "hi")
     private fun call(receivedAt: Long = 1_000L) = ForwardEvent.MissedCall("10010", SimIdentity(SimKey.subscription(2), 1, "B", "副卡", ""), receivedAt, receivedAt, 1)
 
+    private suspend fun Forwarder.forward(
+        event: ForwardEvent,
+        timeout: Duration = Forwarder.PUSH_TIMEOUT,
+        receivedElapsedMs: Long? = null,
+        progress: ((ForwardState) -> ForwardState)? = null,
+    ) = forwardAll(listOf(event), timeout, receivedElapsedMs, progress)
+
     @Test
     fun `delivered sms is counted with latency and sim`() = runTest {
         val transport = ScriptedTransport(ok)
@@ -264,7 +271,7 @@ class ForwarderTest {
     @Test
     fun `first sync only records the watermark`() = runTest {
         val transport = ScriptedTransport()
-        val sync = MissedCallSync({ _, _ -> CallLogSnapshot(41, listOf(LoggedMissedCall(41, call()))) }, stateStore, forwarder(transport))
+        val sync = MissedCallSync({ _, _ -> CallLogSnapshot(41, listOf(call())) }, stateStore, forwarder(transport))
 
         sync.sync()
 
@@ -281,7 +288,7 @@ class ForwarderTest {
             { after, vars ->
                 asked += after
                 requestedVars += vars
-                CallLogSnapshot(43, listOf(LoggedMissedCall(42, call(receivedAt = 2_000L)), LoggedMissedCall(43, call(receivedAt = 3_000L))))
+                CallLogSnapshot(43, listOf(call(receivedAt = 2_000L), call(receivedAt = 3_000L)))
             },
             stateStore,
             forwarder(ScriptedTransport(ok, ok)),
@@ -329,7 +336,7 @@ class ForwarderTest {
     @Test
     fun `interrupted sync persists calls to outbox before draining without losing or duplicating`() = runTest {
         stateBacking.updateData { it.copy(callLogWatermark = 41) }
-        val log = listOf(LoggedMissedCall(42, call(receivedAt = 2_000L)), LoggedMissedCall(43, call(receivedAt = 3_000L)))
+        val log = listOf(42L to call(receivedAt = 2_000L), 43L to call(receivedAt = 3_000L))
         val transport = object : HttpTransport {
             var posts = 0
             override suspend fun postJson(url: String, body: String, timeoutMs: Long): HttpResult {
@@ -340,7 +347,7 @@ class ForwarderTest {
         }
         val fwd = forwarder(transport)
         val sync = MissedCallSync(
-            { after, _ -> CallLogSnapshot(43, log.filter { it.id > (after ?: 0) }) },
+            { after, _ -> CallLogSnapshot(43, log.filter { it.first > (after ?: 0) }.map { it.second }) },
             stateStore,
             fwd,
         )
@@ -421,7 +428,7 @@ class ForwarderTest {
         stateBacking.updateData { it.copy(callLogWatermark = 1) }
         val transport = ScriptedTransport()
 
-        MissedCallSync({ _, _ -> CallLogSnapshot(5, listOf(LoggedMissedCall(5, call()))) }, stateStore, forwarder(transport)).sync()
+        MissedCallSync({ _, _ -> CallLogSnapshot(5, listOf(call())) }, stateStore, forwarder(transport)).sync()
 
         assertEquals(5L, stateBacking.value.callLogWatermark)
         assertTrue(transport.requests.isEmpty())
@@ -442,6 +449,50 @@ class ForwarderTest {
 
         assertEquals(Forwarder.MAX_PENDING, outbox.items.size)
         assertTrue(outbox.items.last().body.contains("msg-${total - 1}"))
+    }
+
+    @Test
+    fun `messages evicted by the outbox cap count as failed`() = runTest {
+        val forwarder = forwarder(ScriptedTransport())
+
+        for (i in 0 until Forwarder.MAX_PENDING + 3) {
+            forwarder.forward(sms(receivedAt = 1_000L + i).copy(content = "msg-$i"), timeout = Duration.ZERO)
+        }
+
+        assertEquals(3, stateBacking.value.stats.failed)
+    }
+
+    @Test
+    fun `message evicted while in flight is counted once`() = runTest {
+        val enqueuer = forwarder(ScriptedTransport())
+        repeat(Forwarder.MAX_PENDING) { i -> enqueuer.forward(sms(receivedAt = 1_000L + i).copy(content = "q-$i"), timeout = Duration.ZERO) }
+        var evicting = true
+        val racing = object : HttpTransport {
+            override suspend fun postJson(url: String, body: String, timeoutMs: Long): HttpResult {
+                if (evicting) {
+                    evicting = false
+                    enqueuer.forward(sms(receivedAt = 9_000L).copy(content = "late"), timeout = Duration.ZERO)
+                }
+                return ok
+            }
+        }
+
+        forwarder(racing).retryPending()
+
+        assertEquals(Forwarder.MAX_PENDING + 1L, stats.delivered + stats.failed)
+    }
+
+    @Test
+    fun `draining a backlog commits its stats in one write`() = runTest {
+        val enqueuer = forwarder(ScriptedTransport())
+        repeat(5) { i -> enqueuer.forward(sms(receivedAt = 1_000L + i).copy(content = "b-$i"), timeout = Duration.ZERO) }
+        val writesBefore = stateBacking.history.size
+
+        assertTrue(forwarder(ScriptedTransport(ok, ok, ok, badKey, ok)).retryPending())
+
+        assertEquals(writesBefore + 1, stateBacking.history.size)
+        assertEquals(4L, stats.delivered)
+        assertEquals(1L, stats.failed)
     }
 
     @Test
@@ -605,5 +656,20 @@ class ForwarderTest {
         forwarder(transport).forward(sms(), timeout = Forwarder.SMS_DIRECT_TIMEOUT)
 
         assertEquals(listOf(5_000L), transport.timeouts)
+    }
+
+    @Test
+    fun `call log watermark resets downward when system call log ids drop`() = runTest {
+        stateBacking.updateData { it.copy(callLogWatermark = 500) }
+        val sync = MissedCallSync({ _, _ -> CallLogSnapshot(0, emptyList()) }, stateStore, forwarder(ScriptedTransport()))
+
+        sync.sync()
+
+        assertEquals(0L, stateBacking.value.callLogWatermark)
+
+        stateBacking.updateData { it.copy(callLogWatermark = 100) }
+        val resetSync = MissedCallSync({ _, _ -> CallLogSnapshot(12, emptyList()) }, stateStore, forwarder(ScriptedTransport()))
+        resetSync.advanceWatermark()
+        assertEquals(12L, stateBacking.value.callLogWatermark)
     }
 }

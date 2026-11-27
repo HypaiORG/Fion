@@ -1,6 +1,9 @@
 package com.hypai.fion.ui.design
 
+import androidx.compose.animation.EnterTransition
+import androidx.compose.animation.ExitTransition
 import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.MutableTransitionState
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -10,6 +13,7 @@ import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.Orientation
 import androidx.compose.foundation.gestures.draggable
 import androidx.compose.foundation.gestures.rememberDraggableState
@@ -30,10 +34,12 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.isImeVisible
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.lazy.LazyColumn
@@ -42,26 +48,16 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.AlertDialogDefaults
-import androidx.compose.material3.BottomSheetDefaults
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.ModalBottomSheet
-import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
-import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -75,16 +71,22 @@ import androidx.compose.ui.input.nestedscroll.NestedScrollSource
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.platform.LocalWindowInfo
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.Velocity
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
+import androidx.compose.ui.window.DialogWindowProvider
 import com.hypai.fion.R
 import kotlin.math.roundToInt
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 
 private val CardShape = RoundedCornerShape(24.dp)
@@ -203,49 +205,92 @@ fun LazyScreenScaffold(
 }
 
 private val SheetShape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp)
+private val DialogShape = RoundedCornerShape(28.dp)
 private val SheetTopGap = 48.dp
 private val SheetDismissDistance = 96.dp
 private val SheetDismissVelocity = 400.dp
+private val FullscreenDialogProperties = DialogProperties(
+    dismissOnBackPress = true,
+    dismissOnClickOutside = false,
+    usePlatformDefaultWidth = false,
+    decorFitsSystemWindows = false,
+)
 
-@OptIn(ExperimentalMaterial3Api::class)
+private val SheetEnter = slideInVertically(tween(300, easing = Motion.EmphasizedDecelerate)) { it }
+private val SheetExit = slideOutVertically(tween(200, easing = Motion.EmphasizedAccelerate)) { it }
+private val DialogEnter = fadeIn(tween(150)) + scaleIn(tween(250, easing = Motion.EmphasizedDecelerate), initialScale = 0.9f)
+private val DialogExit = fadeOut(tween(120)) + scaleOut(tween(150, easing = Motion.EmphasizedAccelerate), targetScale = 0.94f)
+
+@Composable
+private fun FullscreenOverlay(
+    onDismiss: () -> Unit,
+    enter: EnterTransition,
+    exit: ExitTransition,
+    contentAlignment: Alignment,
+    content: @Composable (requestClose: (after: () -> Unit) -> Unit) -> Unit,
+) {
+    val shown = remember { MutableTransitionState(false).apply { targetState = true } }
+    var pendingAfter by remember { mutableStateOf<(() -> Unit)?>(null) }
+    val latestDismiss by rememberUpdatedState(onDismiss)
+
+    fun startClose(after: () -> Unit) {
+        if (!shown.targetState) return
+        pendingAfter = after
+        shown.targetState = false
+    }
+
+    LaunchedEffect(shown.currentState, shown.isIdle, shown.targetState) {
+        if (!shown.targetState && shown.isIdle && !shown.currentState) {
+            val after = pendingAfter
+            pendingAfter = null
+            after?.invoke()
+        }
+    }
+
+    Dialog(onDismissRequest = { startClose(latestDismiss) }, properties = FullscreenDialogProperties) {
+        val view = LocalView.current
+        DisposableEffect(view) {
+            (view.parent as? DialogWindowProvider)?.window?.setDimAmount(0f)
+            onDispose {}
+        }
+        OverlayBackdrop(shown, shown.targetState, { startClose(latestDismiss) }, enter, exit, contentAlignment) {
+            content(::startClose)
+        }
+    }
+}
+
 @Composable
 fun AppSheet(
     title: String,
     subtitle: String,
     onDismiss: () -> Unit,
-    actions: (@Composable RowScope.() -> Unit)? = null,
+    actions: (@Composable RowScope.(close: (after: () -> Unit) -> Unit) -> Unit)? = null,
     content: @Composable ColumnScope.(close: (after: () -> Unit) -> Unit) -> Unit,
 ) {
     val host = LocalPaneOverlay.current
     if (host != null) {
         val close: (() -> Unit) -> Unit = { after ->
+            host.pendingAfterExit = after
             onDismiss()
-            after()
         }
-        PaneSheet(host, onDismiss) { SheetBody(title, subtitle, actions) { content(close) } }
+        PaneOverlay(host, onDismiss, SheetEnter, SheetExit, Alignment.BottomCenter) {
+            SheetSurface(inPane = true, onDismiss = onDismiss) {
+                SheetBody(title, subtitle, actions?.let { { it(close) } }) { content(close) }
+            }
+        }
         return
     }
-    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
-    val scope = rememberCoroutineScope()
-    val close: (() -> Unit) -> Unit = { after ->
-        scope.launch {
-            sheetState.hide()
-            onDismiss()
-            after()
+    FullscreenOverlay(onDismiss = onDismiss, enter = SheetEnter, exit = SheetExit, contentAlignment = Alignment.BottomCenter) { requestClose ->
+        val close: (() -> Unit) -> Unit = { after ->
+            requestClose {
+                onDismiss()
+                after()
+            }
+        }
+        SheetSurface(inPane = false, onDismiss = { close {} }) {
+            SheetBody(title, subtitle, actions?.let { { it(close) } }) { content(close) }
         }
     }
-    ModalBottomSheet(
-        onDismissRequest = onDismiss,
-        sheetState = sheetState,
-        containerColor = Palette.Sheet,
-        dragHandle = { SheetHandle() },
-    ) { SheetBody(title, subtitle, actions) { content(close) } }
-}
-
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-private fun SheetHandle() {
-    BottomSheetDefaults.DragHandle(width = 32.dp, height = 4.dp, color = Palette.Ink.copy(alpha = 0.28f))
 }
 
 @Composable
@@ -270,89 +315,110 @@ private fun ColumnScope.SheetBody(
 }
 
 @Composable
-private fun PaneSheet(host: PaneOverlayHost, onDismiss: () -> Unit, body: @Composable ColumnScope.() -> Unit) {
-    val enter = slideInVertically(tween(300, easing = Motion.EmphasizedDecelerate)) { it }
-    val exit = slideOutVertically(tween(200, easing = Motion.EmphasizedAccelerate)) { it }
-    PaneOverlay(host, onDismiss, enter, exit) {
-        val density = LocalDensity.current
-        val scope = rememberCoroutineScope()
-        val dragY = remember { Animatable(0f) }
-        val dismissDistance = with(density) { SheetDismissDistance.toPx() }
-        val dismissVelocity = with(density) { SheetDismissVelocity.toPx() }
-        fun settle(velocity: Float) {
-            if (dragY.value > dismissDistance || velocity > dismissVelocity) {
-                onDismiss()
-            } else {
-                scope.launch { dragY.animateTo(0f, tween(200, easing = Motion.EmphasizedDecelerate)) }
-            }
-        }
-        val nestedScroll = remember(dismissDistance, dismissVelocity, onDismiss) {
-            object : NestedScrollConnection {
-                override fun onPreScroll(available: Offset, source: NestedScrollSource): Offset {
-                    if (available.y < 0f && dragY.value > 0f) {
-                        val consumed = available.y.coerceAtLeast(-dragY.value)
-                        scope.launch { dragY.snapTo((dragY.value + consumed).coerceAtLeast(0f)) }
-                        return Offset(0f, consumed)
-                    }
-                    return Offset.Zero
-                }
+private fun SheetSurface(
+    inPane: Boolean,
+    onDismiss: () -> Unit,
+    body: @Composable ColumnScope.() -> Unit,
+) {
+    val density = LocalDensity.current
+    val scope = rememberCoroutineScope()
+    val latestDismiss by rememberUpdatedState(onDismiss)
+    var dragY by remember { mutableFloatStateOf(0f) }
+    var settleJob by remember { mutableStateOf<Job?>(null) }
+    val dismissDistance = with(density) { SheetDismissDistance.toPx() }
+    val dismissVelocity = with(density) { SheetDismissVelocity.toPx() }
 
-                override fun onPostScroll(consumed: Offset, available: Offset, source: NestedScrollSource): Offset {
-                    if (available.y > 0f && source == NestedScrollSource.UserInput) {
-                        scope.launch { dragY.snapTo((dragY.value + available.y).coerceAtLeast(0f)) }
-                        return Offset(0f, available.y)
-                    }
-                    return Offset.Zero
-                }
+    fun updateDrag(next: Float) {
+        settleJob?.cancel()
+        settleJob = null
+        dragY = next.coerceAtLeast(0f)
+    }
 
-                override suspend fun onPreFling(available: Velocity): Velocity {
-                    if (dragY.value > 0f) {
-                        settle(available.y)
-                        return available
-                    }
-                    return Velocity.Zero
+    fun settle(velocity: Float) {
+        if (dragY > dismissDistance || velocity > dismissVelocity) {
+            latestDismiss()
+        } else if (dragY > 0f) {
+            val start = dragY
+            settleJob?.cancel()
+            settleJob = scope.launch {
+                val anim = Animatable(start)
+                anim.animateTo(0f, tween(200, easing = Motion.EmphasizedDecelerate)) {
+                    dragY = value
                 }
             }
         }
-        val dragState = rememberDraggableState { delta ->
-            scope.launch { dragY.snapTo((dragY.value + delta).coerceAtLeast(0f)) }
+    }
+
+    val nestedScroll = remember(dismissDistance, dismissVelocity) {
+        object : NestedScrollConnection {
+            override fun onPreScroll(available: Offset, source: NestedScrollSource): Offset {
+                if (available.y < 0f && dragY > 0f) {
+                    val consumed = available.y.coerceAtLeast(-dragY)
+                    updateDrag(dragY + consumed)
+                    return Offset(0f, consumed)
+                }
+                return Offset.Zero
+            }
+
+            override fun onPostScroll(consumed: Offset, available: Offset, source: NestedScrollSource): Offset {
+                if (available.y > 0f && source == NestedScrollSource.UserInput) {
+                    updateDrag(dragY + available.y)
+                    return Offset(0f, available.y)
+                }
+                return Offset.Zero
+            }
+
+            override suspend fun onPreFling(available: Velocity): Velocity {
+                if (dragY > 0f) {
+                    settle(available.y)
+                    return available
+                }
+                return Velocity.Zero
+            }
         }
-        Column(
+    }
+    val dragState = rememberDraggableState { delta -> updateDrag(dragY + delta) }
+    val safeModifier = if (inPane) Modifier else Modifier.statusBarsPadding().imePadding()
+    val bottomInset = if (inPane) Modifier else Modifier.navigationBarsPadding()
+
+    Column(
+        Modifier
+            .then(safeModifier)
+            .padding(top = SheetTopGap)
+            .widthIn(max = 640.dp)
+            .fillMaxWidth()
+            .offset { IntOffset(0, dragY.roundToInt()) }
+            .clip(SheetShape)
+            .background(Palette.Sheet)
+            .blockPaneTouches()
+            .nestedScroll(nestedScroll)
+            .draggable(dragState, Orientation.Vertical, onDragStopped = { settle(it) })
+            .then(bottomInset),
+    ) {
+        Box(
             Modifier
-                .align(Alignment.BottomCenter)
-                .padding(top = SheetTopGap)
-                .fillMaxWidth()
-                .offset { IntOffset(0, dragY.value.roundToInt()) }
-                .clip(SheetShape)
-                .background(Palette.Sheet)
-                .nestedScroll(nestedScroll)
-                .draggable(dragState, Orientation.Vertical, onDragStopped = { settle(it) }),
-        ) {
-            Box(Modifier.align(Alignment.CenterHorizontally)) { SheetHandle() }
-            body()
-        }
+                .align(Alignment.CenterHorizontally)
+                .padding(vertical = 18.dp)
+                .size(32.dp, 4.dp)
+                .clip(CircleShape)
+                .background(Palette.Ink.copy(alpha = 0.28f)),
+        )
+        body()
     }
 }
 
 @Composable
-fun SheetButton(text: String, filled: Boolean, enabled: Boolean = true, onClick: () -> Unit) {
-    if (filled) {
-        Button(
-            onClick = onClick,
-            Modifier.height(40.dp),
-            enabled = enabled,
-            colors = ButtonDefaults.buttonColors(
-                containerColor = Palette.Navy,
-                contentColor = Color.White,
-                disabledContainerColor = Palette.Ink.copy(alpha = 0.10f),
-                disabledContentColor = Palette.Ink.copy(alpha = 0.38f),
-            ),
-            contentPadding = PaddingValues(horizontal = 24.dp),
-        ) { Text(text, style = Type.Label, fontWeight = FontWeight.SemiBold) }
-    } else {
-        TextButton(onClick = onClick, Modifier.height(40.dp)) {
-            Text(text, style = Type.Label, fontWeight = FontWeight.SemiBold, color = Palette.Navy)
-        }
+fun SheetButton(text: String, filled: Boolean, color: Color = Palette.Navy, onClick: () -> Unit) {
+    Box(
+        Modifier
+            .height(40.dp)
+            .clip(CircleShape)
+            .background(if (filled) color else Color.Transparent)
+            .clickable(role = Role.Button, onClick = onClick)
+            .padding(horizontal = if (filled) 24.dp else 12.dp),
+        contentAlignment = Alignment.Center,
+    ) {
+        Text(text, style = Type.Label, fontWeight = FontWeight.SemiBold, color = if (filled) Color.White else color, maxLines = 1)
     }
 }
 
@@ -365,49 +431,37 @@ fun ConfirmDialog(
     onConfirm: () -> Unit,
     onDismiss: () -> Unit,
 ) {
-    val confirmButton: @Composable () -> Unit = { TextButton(onClick = onConfirm) { Text(confirm, color = Palette.Error) } }
-    val dismissButton: @Composable () -> Unit = { TextButton(onClick = onDismiss) { Text(dismiss, color = Palette.Navy) } }
-    val host = LocalPaneOverlay.current
-    if (host == null) {
-        AlertDialog(
-            onDismissRequest = onDismiss,
-            containerColor = Palette.Sheet,
-            title = { Text(title) },
-            text = { Text(text) },
-            confirmButton = confirmButton,
-            dismissButton = dismissButton,
-        )
-        return
-    }
-    val enter = fadeIn(tween(150)) + scaleIn(tween(250, easing = Motion.EmphasizedDecelerate), initialScale = 0.9f)
-    val exit = fadeOut(tween(120)) + scaleOut(tween(150, easing = Motion.EmphasizedAccelerate), targetScale = 0.94f)
-    PaneOverlay(host, onDismiss, enter, exit) {
+    val card: @Composable (dismissAction: () -> Unit, confirmAction: () -> Unit) -> Unit = { doDismiss, doConfirm ->
         Column(
             Modifier
-                .align(Alignment.Center)
                 .padding(24.dp)
-                .fillMaxWidth()
                 .widthIn(max = 560.dp)
-                .blockPaneTouches()
-                .clip(AlertDialogDefaults.shape)
+                .fillMaxWidth()
+                .clip(DialogShape)
                 .background(Palette.Sheet)
+                .blockPaneTouches()
                 .padding(24.dp),
         ) {
-            Text(title, style = MaterialTheme.typography.headlineSmall, color = AlertDialogDefaults.titleContentColor)
-            Text(
-                text,
-                Modifier.padding(top = 16.dp),
-                style = MaterialTheme.typography.bodyMedium,
-                color = AlertDialogDefaults.textContentColor,
-            )
+            Text(title, style = Type.PageTitle, color = Palette.Ink)
+            Text(text, Modifier.padding(top = 16.dp), style = Type.Body, color = Palette.Muted)
             Row(
                 Modifier.align(Alignment.End).padding(top = 24.dp),
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
             ) {
-                dismissButton()
-                confirmButton()
+                SheetButton(dismiss, filled = false, onClick = doDismiss)
+                SheetButton(confirm, filled = false, color = Palette.Error, onClick = doConfirm)
             }
         }
+    }
+    val host = LocalPaneOverlay.current
+    if (host != null) {
+        PaneOverlay(host, onDismiss, DialogEnter, DialogExit, Alignment.Center) {
+            card(onDismiss, onConfirm)
+        }
+        return
+    }
+    FullscreenOverlay(onDismiss = onDismiss, enter = DialogEnter, exit = DialogExit, contentAlignment = Alignment.Center) { requestClose ->
+        card({ requestClose(onDismiss) }, { requestClose(onConfirm) })
     }
 }
 
@@ -424,8 +478,8 @@ fun InfoNote(text: String, modifier: Modifier = Modifier, icon: ImageVector = Ic
 }
 
 @Composable
-fun Chevron(tint: Color = Palette.Muted, size: Dp = 20.dp) {
-    Icon(Icons.Chevron, contentDescription = null, Modifier.size(size), tint = tint)
+fun Chevron() {
+    Icon(Icons.Chevron, contentDescription = null, Modifier.size(20.dp), tint = Palette.Muted)
 }
 
 @Composable
@@ -474,9 +528,8 @@ fun IconBadge(
     size: Dp = 42.dp,
     iconSize: Dp = 20.dp,
     alert: Boolean = false,
-    modifier: Modifier = Modifier,
 ) {
-    Box(modifier) {
+    Box {
         Box(Modifier.size(size).clip(shape).background(background), contentAlignment = Alignment.Center) {
             Icon(icon, contentDescription = null, Modifier.size(iconSize), tint = tint)
         }
@@ -500,5 +553,4 @@ fun IconBadge(
     size: Dp = 42.dp,
     iconSize: Dp = 20.dp,
     alert: Boolean = false,
-    modifier: Modifier = Modifier,
-) = IconBadge(style.icon, style.background, style.tint, shape, size, iconSize, alert, modifier)
+) = IconBadge(style.icon, style.background, style.tint, shape, size, iconSize, alert)

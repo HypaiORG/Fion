@@ -1,7 +1,6 @@
 package com.hypai.fion.forward
 
 import com.hypai.fion.bark.BarkClient
-import com.hypai.fion.bark.BarkEndpoint
 import com.hypai.fion.bark.endpoint
 import com.hypai.fion.store.ForwardState
 import com.hypai.fion.store.ForwardStateStore
@@ -21,7 +20,6 @@ import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
-import kotlinx.coroutines.withTimeoutOrNull
 
 class Forwarder(
     private val settingsStore: SettingsStore,
@@ -57,14 +55,7 @@ class Forwarder(
         kind in enabledKinds(settings, state)
 
     suspend fun usedVariables(kind: EventKind): Set<TemplateVariable> =
-        settingsStore.snapshot().push(kind).template.usedVariables(kind, language())
-
-    suspend fun forward(
-        event: ForwardEvent,
-        timeout: Duration = PUSH_TIMEOUT,
-        receivedElapsedMs: Long? = null,
-        progress: ((ForwardState) -> ForwardState)? = null,
-    ) = forwardAll(listOf(event), timeout, receivedElapsedMs, progress)
+        settingsStore.snapshot().push(kind).template.usedVariables(kind)
 
     suspend fun forwardAll(
         events: List<ForwardEvent>,
@@ -84,8 +75,10 @@ class Forwarder(
         val currentZone = zone()
         val currentLanguage = language()
         val messages = routable.map { it.toMessage(current.push(it.kind).template, currentZone, currentLanguage, secret) }
-        outbox.enqueue(messages, MAX_PENDING)
-        if (progress != null) stateStore.settle(progress)
+        val evicted = outbox.enqueue(messages, MAX_PENDING)
+        if (evicted > 0 || progress != null) {
+            stateStore.settle { state -> (progress?.invoke(state) ?: state).let { it.copy(stats = it.stats.withFailed(evicted)) } }
+        }
 
         if (timeout <= Duration.ZERO || !isNetworkAvailable()) {
             scheduleRetry()
@@ -108,35 +101,26 @@ class Forwarder(
         receivedElapsedMs: Long? = null,
     ): Boolean = drainLock.withLock {
         val deadlineMs = budget?.let { elapsedMs() + it.inWholeMilliseconds }
-        val expired = outbox.purgeExpired(now() - PENDING_EXPIRY.inWholeMilliseconds)
-        if (expired > 0) stateStore.settle { it.copy(stats = it.stats.withFailed(expired)) }
-
+        val delivered = mutableListOf<Pair<Message, Long?>>()
+        var failed = outbox.purgeExpired(now() - PENDING_EXPIRY.inWholeMilliseconds)
         val attemptedIds = HashSet<String>()
         var consecutiveServerErrors = 0
         var aborted = false
 
-        loop@ while (true) {
-            val kinds = enabledKinds(settingsStore.snapshot(), stateStore.snapshot())
-            if (kinds.isEmpty()) break
-            val snapshot = outbox.list(kinds).filterNot { it.id in attemptedIds }
-            if (snapshot.isEmpty()) break
-
-            for (message in snapshot) {
+        try {
+            while (true) {
                 val current = settingsStore.snapshot()
-                val state = stateStore.snapshot()
-                val endpoint = current.bark.endpoint()
-                    ?.takeIf { isActive(current, state) && current.forwards(message.kind) }
-                    ?: continue
-
+                val message = outbox.next(enabledKinds(current, stateStore.snapshot()), attemptedIds) ?: break
+                val endpoint = current.bark.endpoint() ?: break
                 val reqTimeoutMs = deadlineMs?.let { (it - elapsedMs()).coerceAtMost(PUSH_TIMEOUT.inWholeMilliseconds) }
                     ?: PUSH_TIMEOUT.inWholeMilliseconds
                 if (reqTimeoutMs < MIN_REQUEST_TIMEOUT_MS || !isNetworkAvailable()) {
                     aborted = true
-                    break@loop
+                    break
                 }
 
                 attemptedIds += message.id
-                when (val delivery = push(endpoint, current, message, reqTimeoutMs)) {
+                when (val delivery = bark.push(endpoint, current.push(message.kind), language(), message, reqTimeoutMs)) {
                     Delivery.Delivered -> {
                         consecutiveServerErrors = 0
                         val latency = if (message.id in liveIds) {
@@ -145,21 +129,25 @@ class Forwarder(
                         } else {
                             null
                         }
-                        outbox.remove(message.id)
-                        stateStore.settle { it.copy(stats = it.stats.withDelivered(message, latency)) }
+                        if (outbox.remove(message.id)) delivered += message to latency
                     }
                     is Delivery.Rejected -> {
                         consecutiveServerErrors = 0
-                        outbox.remove(message.id)
-                        stateStore.settle { it.copy(stats = it.stats.withFailed()) }
+                        if (outbox.remove(message.id)) failed++
                     }
                     is Delivery.Unreachable -> {
-                        if (delivery.serverError && ++consecutiveServerErrors < MAX_CONSECUTIVE_SERVER_ERRORS) {
-                            continue
+                        if (!delivery.serverError || ++consecutiveServerErrors >= MAX_CONSECUTIVE_SERVER_ERRORS) {
+                            aborted = true
+                            break
                         }
-                        aborted = true
-                        break@loop
                     }
+                }
+            }
+        } finally {
+            if (delivered.isNotEmpty() || failed > 0) {
+                stateStore.settle { state ->
+                    val stats = delivered.fold(state.stats) { acc, (message, latency) -> acc.withDelivered(message, latency) }
+                    state.copy(stats = stats.withFailed(failed))
                 }
             }
         }
@@ -177,11 +165,6 @@ class Forwarder(
         currentCoroutineContext().ensureActive()
         return stored.deliverySecret ?: created
     }
-
-    private suspend fun push(endpoint: BarkEndpoint, settings: Settings, message: Message, timeoutMs: Long): Delivery =
-        withTimeoutOrNull(timeoutMs) {
-            bark.push(endpoint, settings.push(message.kind), language(), message, timeoutMs)
-        } ?: Delivery.Unreachable()
 
     companion object {
         val PUSH_TIMEOUT = 8.seconds

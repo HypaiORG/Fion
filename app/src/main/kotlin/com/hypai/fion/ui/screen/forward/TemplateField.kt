@@ -2,6 +2,7 @@ package com.hypai.fion.ui.screen.forward
 
 import android.graphics.BlurMaskFilter
 import android.graphics.Paint as AndroidPaint
+import android.os.SystemClock
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.core.Animatable
@@ -40,14 +41,13 @@ import androidx.compose.foundation.text.input.insert
 import androidx.compose.foundation.text.input.rememberTextFieldState
 import androidx.compose.foundation.text.input.setTextAndPlaceCursorAtEnd
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
@@ -57,7 +57,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.clipToBounds
-import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.drawWithCache
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
@@ -84,8 +83,10 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.LocalWindowInfo
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.CustomAccessibilityAction
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.customActions
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.TextLayoutResult
@@ -115,6 +116,7 @@ import com.hypai.fion.ui.design.FormFieldFrame
 import com.hypai.fion.ui.design.Icons
 import com.hypai.fion.ui.design.Motion
 import com.hypai.fion.ui.design.Palette
+import com.hypai.fion.ui.design.Text
 import com.hypai.fion.ui.design.Type
 import kotlin.math.roundToInt
 import kotlinx.coroutines.launch
@@ -162,6 +164,8 @@ private val PickerShape = RoundedCornerShape(PickerCorner)
 private val PickerRowShape = RoundedCornerShape(11.dp)
 private val ChipFontSize = 14.sp
 private val ChipVerticalInset = 2.dp
+private const val DISMISS_REOPEN_GUARD_MS = 180L
+private const val MAX_PENDING_ECHOES = 16
 
 private val TemplateTextStyle = TextStyle(
     fontSize = 15.sp,
@@ -205,21 +209,26 @@ internal fun TemplateField(
     val insetPx = with(density) { ChipVerticalInset.toPx() }
 
     var lastObservedText by remember { mutableStateOf(initialBuffer) }
-    var lastExternalValue by remember { mutableStateOf(value) }
+    val pendingEchoes = remember { ArrayDeque<List<TemplatePart>>() }
+    var wasFocused by remember { mutableStateOf(false) }
     var pickerTarget by remember { mutableStateOf<VariablePickerTarget?>(null) }
-    var pickerScrollOffset by remember { mutableFloatStateOf(0f) }
+    var dismissedToken by remember { mutableStateOf<BufferToken?>(null) }
+    var dismissedAtMs by remember { mutableLongStateOf(0L) }
     var textLayoutResult by remember { mutableStateOf<TextLayoutResult?>(null) }
     var textBoxOriginInWindow by remember { mutableStateOf(Offset.Zero) }
     var textBoxWidthInWindow by remember { mutableIntStateOf(0) }
 
-    val placements by remember(language, kind, readiness.granted) {
+    val placementsState = remember(language, kind, readiness.granted) {
         derivedStateOf { computeChipPlacements(textState.text.toString(), language, kind, readiness::allows) }
     }
-    val drawnChips = remember(textLayoutResult, placements, insetPx) {
-        val layout = textLayoutResult ?: return@remember emptyList()
-        placements.map { placement ->
-            val rects = chipRects(layout, placement, insetPx)
-            DrawnChip(placement, rects, warningRect(layout, placement, rects.firstOrNull()))
+    val placements by placementsState
+    val drawnChipsState = remember(placementsState, insetPx) {
+        derivedStateOf {
+            val layout = textLayoutResult ?: return@derivedStateOf emptyList()
+            placementsState.value.map { placement ->
+                val rects = chipRects(layout, placement, insetPx)
+                DrawnChip(placement, rects, warningRect(layout, placement, rects.firstOrNull()))
+            }
         }
     }
 
@@ -229,10 +238,14 @@ internal fun TemplateField(
     val latestFocused by rememberUpdatedState(focused)
 
     LaunchedEffect(value) {
-        if (value == lastExternalValue) return@LaunchedEffect
-        lastExternalValue = value
+        val echoIdx = pendingEchoes.indexOf(value)
+        if (echoIdx >= 0) {
+            repeat(echoIdx + 1) { pendingEchoes.removeFirst() }
+            return@LaunchedEffect
+        }
         val encoded = encodeTemplateParts(value)
         if (textState.text.toString() != encoded) {
+            pendingEchoes.clear()
             lastObservedText = encoded
             pickerTarget = null
             textState.setTextAndPlaceCursorAtEnd(encoded)
@@ -244,14 +257,10 @@ internal fun TemplateField(
     }
 
     LaunchedEffect(focused) {
-        if (!focused && pickerTarget is VariablePickerTarget.Insert) {
+        if (!focused && (wasFocused || pickerTarget is VariablePickerTarget.Insert)) {
             pickerTarget = null
         }
-    }
-
-    LaunchedEffect(pickerTarget != null, scrollState) {
-        if (pickerTarget == null) return@LaunchedEffect
-        snapshotFlow { scrollState.value.toFloat() }.collect { pickerScrollOffset = it }
+        wasFocused = focused
     }
 
     LaunchedEffect(textState) {
@@ -263,7 +272,8 @@ internal fun TemplateField(
             if (textChanged) {
                 lastObservedText = currentText
                 val decoded = decodeTemplateParts(currentText, latestKind)
-                lastExternalValue = decoded
+                if (pendingEchoes.size >= MAX_PENDING_ECHOES) pendingEchoes.removeFirst()
+                pendingEchoes.addLast(decoded)
                 latestOnValueChange(decoded)
             }
 
@@ -279,9 +289,7 @@ internal fun TemplateField(
                     hasComposition = hasComposition,
                     variables = latestVariables,
                 )
-                textChanged -> detectNewSlashTrigger(prevText, currentText, selection.start, selection.end, latestKind)?.also {
-                    pickerScrollOffset = scrollState.value.toFloat()
-                }
+                textChanged -> detectNewSlashTrigger(prevText, currentText, selection.start, selection.end, latestKind)
                 else -> null
             }
         }
@@ -292,6 +300,8 @@ internal fun TemplateField(
         chipOutputTransformation(language, kind, readiness::allows)
     }
     val activeReplaceToken = (pickerTarget as? VariablePickerTarget.Replace)?.token
+    val pickerLabel = stringResource(R.string.forward_variable_picker)
+    val grantLabel = stringResource(R.string.keep_grant)
 
     BackHandler(enabled = pickerTarget != null) { pickerTarget = null }
 
@@ -306,7 +316,24 @@ internal fun TemplateField(
                 state = textState,
                 modifier = Modifier
                     .fillMaxWidth()
-                    .semantics { contentDescription = label },
+                    .semantics {
+                        contentDescription = label
+                        if (placements.isNotEmpty()) {
+                            customActions = placements.map { placement ->
+                                val name = placement.token.variable.displayName(language)
+                                val actionLabel = if (placement.missingPermission) "$grantLabel $name" else "$pickerLabel · $name"
+                                CustomAccessibilityAction(actionLabel) {
+                                    if (placement.missingPermission) {
+                                        pickerTarget = null
+                                        onMissingPermission(placement.token.variable)
+                                    } else {
+                                        pickerTarget = VariablePickerTarget.Replace(placement.token)
+                                    }
+                                    true
+                                }
+                            }
+                        }
+                    },
                 textStyle = TemplateTextStyle.copy(color = Palette.Ink),
                 lineLimits = if (singleLine) {
                     TextFieldLineLimits.SingleLine
@@ -328,7 +355,7 @@ internal fun TemplateField(
                         textStyle = TemplateTextStyle,
                     ) {
                         TemplateTextSurface(
-                            drawnChips = drawnChips,
+                            drawnChips = { drawnChipsState.value },
                             activeReplaceToken = activeReplaceToken,
                             scrollState = scrollState,
                             singleLine = singleLine,
@@ -341,8 +368,12 @@ internal fun TemplateField(
                                     pickerTarget = null
                                     onMissingPermission(placement.token.variable)
                                 } else {
-                                    pickerScrollOffset = scrollState.value.toFloat()
-                                    pickerTarget = VariablePickerTarget.Replace(placement.token)
+                                    val now = SystemClock.uptimeMillis()
+                                    if (dismissedToken == placement.token && now - dismissedAtMs < DISMISS_REOPEN_GUARD_MS) {
+                                        dismissedToken = null
+                                    } else {
+                                        pickerTarget = VariablePickerTarget.Replace(placement.token)
+                                    }
                                 }
                             },
                             innerTextField = innerTextField,
@@ -362,37 +393,25 @@ internal fun TemplateField(
         }
 
         val currentTarget = pickerTarget
-        val currentLayout = textLayoutResult
+        val currentLayout = if (currentTarget != null) textLayoutResult else null
         if (currentTarget != null && currentLayout != null) {
+            val drawnChips = drawnChipsState.value
             val items = remember(currentTarget, lastObservedText, variables) {
                 pickerItemsForTarget(currentTarget, lastObservedText, variables)
             }
-            val anchor = remember(
-                currentTarget,
-                currentLayout,
-                placements,
-                drawnChips,
-                textBoxOriginInWindow,
-                pickerScrollOffset,
-                singleLine,
-            ) {
-                computeAnchorInWindow(
-                    target = currentTarget,
-                    layout = currentLayout,
-                    placements = placements,
-                    drawnChips = drawnChips,
-                    boxOrigin = textBoxOriginInWindow,
-                    scrollOffset = pickerScrollOffset,
-                    singleLine = singleLine,
-                )
+            val localRect = remember(currentTarget, currentLayout, placements, drawnChips) {
+                computeAnchorLocalRect(currentTarget, currentLayout, placements, drawnChips)
             }
-            if (anchor != null && items.isNotEmpty()) {
+            if (localRect != null && items.isNotEmpty()) {
                 VariablePickerPopup(
                     items = items,
                     activeVariable = activeReplaceToken?.variable,
                     isGranted = readiness::allows,
                     language = language,
-                    anchor = anchor,
+                    localAnchorRect = localRect,
+                    boxOrigin = textBoxOriginInWindow,
+                    scrollState = scrollState,
+                    singleLine = singleLine,
                     fieldLeft = textBoxOriginInWindow.x.roundToInt(),
                     fieldWidth = textBoxWidthInWindow,
                     onSelect = { variable ->
@@ -414,7 +433,11 @@ internal fun TemplateField(
                         pickerTarget = null
                         onMissingPermission(variable)
                     },
-                    onDismiss = { pickerTarget = null },
+                    onDismiss = {
+                        dismissedToken = activeReplaceToken
+                        dismissedAtMs = SystemClock.uptimeMillis()
+                        pickerTarget = null
+                    },
                 )
             }
         }
@@ -423,29 +446,39 @@ internal fun TemplateField(
 
 private fun atomicTokenInputTransformation(kind: EventKind): InputTransformation = InputTransformation {
     val originalTokens = findBufferTokens(originalText.toString(), kind)
-    if (originalTokens.isEmpty()) return@InputTransformation
-    val change = diffSingleChange(
-        old = originalText,
-        new = asCharSequence(),
-        oldSelectionMin = originalSelection.min,
-        newSelectionMin = selection.min,
-    ) ?: return@InputTransformation
-    for (fix in computeAtomicEditFixes(originalTokens, change)) {
-        when (fix) {
-            is BufferFix.DeleteRange -> {
-                if (fix.start >= 0 && fix.end <= length && fix.start < fix.end) {
-                    delete(fix.start, fix.end)
+    if (originalTokens.isNotEmpty()) {
+        val change = diffSingleChange(
+            old = originalText,
+            new = asCharSequence(),
+            oldSelectionMin = originalSelection.min,
+            newSelectionMin = selection.min,
+        )
+        if (change != null) {
+            for (fix in computeAtomicEditFixes(originalTokens, change)) {
+                when (fix) {
+                    is BufferFix.DeleteRange -> {
+                        if (fix.start >= 0 && fix.end <= length && fix.start < fix.end) {
+                            delete(fix.start, fix.end)
+                        }
+                    }
+                    is BufferFix.MoveInsertedOutsideToken -> {
+                        if (fix.insertedStart >= 0 && fix.insertedEnd <= length && fix.insertedStart < fix.insertedEnd) {
+                            val inserted = asCharSequence().subSequence(fix.insertedStart, fix.insertedEnd).toString()
+                            delete(fix.insertedStart, fix.insertedEnd)
+                            val dest = fix.targetIndex.coerceIn(0, length)
+                            insert(dest, inserted)
+                            selection = TextRange(dest + inserted.length)
+                        }
+                    }
                 }
             }
-            is BufferFix.MoveInsertedOutsideToken -> {
-                if (fix.insertedStart >= 0 && fix.insertedEnd <= length && fix.insertedStart < fix.insertedEnd) {
-                    val inserted = asCharSequence().subSequence(fix.insertedStart, fix.insertedEnd).toString()
-                    delete(fix.insertedStart, fix.insertedEnd)
-                    val dest = fix.targetIndex.coerceIn(0, length)
-                    insert(dest, inserted)
-                    selection = TextRange(dest + inserted.length)
-                }
-            }
+        }
+    }
+    val invalidSentinels = findInvalidSentinelRanges(asCharSequence().toString(), kind)
+    for (range in invalidSentinels.asReversed()) {
+        val endExclusive = (range.last + 1).coerceAtMost(length)
+        if (range.first in 0 until endExclusive) {
+            delete(range.first, endExclusive)
         }
     }
 }
@@ -473,7 +506,7 @@ private fun chipOutputTransformation(
 
 @Composable
 private fun TemplateTextSurface(
-    drawnChips: List<DrawnChip>,
+    drawnChips: () -> List<DrawnChip>,
     activeReplaceToken: BufferToken?,
     scrollState: ScrollState,
     singleLine: Boolean,
@@ -491,29 +524,31 @@ private fun TemplateTextSurface(
             .fillMaxWidth()
             .clipToBounds()
             .onGloballyPositioned { coords -> onBoundsChanged(coords.positionInWindow(), coords.size.width) }
-            .drawBehind {
-                val scrollX = if (singleLine) -scrollState.value.toFloat() else 0f
-                val scrollY = if (!singleLine) -scrollState.value.toFloat() else 0f
+            .drawWithCache {
                 val radius = CornerRadius(ChipCorner.toPx())
-                val borderWidth = 0.75.dp.toPx()
-                val activeBorderWidth = 1.25.dp.toPx()
-                for ((placement, rects, warningRect) in drawnChips) {
-                    val chipColor = if (placement.missingPermission) MissingChipColor else placement.token.variable.chipColor()
-                    val isSelected = !placement.missingPermission && placement.token == activeReplaceToken
-                    val stroke = Stroke(if (isSelected) activeBorderWidth else borderWidth)
-                    val borderColor = if (isSelected) chipColor.foreground.copy(alpha = 0.55f) else chipColor.border
-                    for (rect in rects) {
-                        val topLeft = Offset(rect.left + scrollX, rect.top + scrollY)
-                        val rectSize = Size(rect.width, rect.height)
-                        drawRoundRect(chipColor.background, topLeft, rectSize, radius)
-                        drawRoundRect(borderColor, topLeft, rectSize, radius, style = stroke)
-                    }
-                    if (warningRect != null) {
-                        val iconSize = minOf(warningRect.width, warningRect.height) * 0.82f
-                        val iconLeft = warningRect.left + scrollX + (warningRect.width - iconSize) / 2f
-                        val iconTop = warningRect.top + scrollY + (warningRect.height - iconSize) / 2f
-                        translate(iconLeft, iconTop) {
-                            with(warningPainter) { draw(Size(iconSize, iconSize), colorFilter = warningTint) }
+                val normalStroke = Stroke(0.75.dp.toPx())
+                val activeStroke = Stroke(1.25.dp.toPx())
+                onDrawBehind {
+                    val scrollX = if (singleLine) -scrollState.value.toFloat() else 0f
+                    val scrollY = if (!singleLine) -scrollState.value.toFloat() else 0f
+                    for ((placement, rects, warningRect) in drawnChips()) {
+                        val chipColor = if (placement.missingPermission) MissingChipColor else placement.token.variable.chipColor()
+                        val isSelected = !placement.missingPermission && placement.token == activeReplaceToken
+                        val stroke = if (isSelected) activeStroke else normalStroke
+                        val borderColor = if (isSelected) chipColor.foreground.copy(alpha = 0.55f) else chipColor.border
+                        for (rect in rects) {
+                            val topLeft = Offset(rect.left + scrollX, rect.top + scrollY)
+                            val rectSize = Size(rect.width, rect.height)
+                            drawRoundRect(chipColor.background, topLeft, rectSize, radius)
+                            drawRoundRect(borderColor, topLeft, rectSize, radius, style = stroke)
+                        }
+                        if (warningRect != null) {
+                            val iconSize = minOf(warningRect.width, warningRect.height) * 0.82f
+                            val iconLeft = warningRect.left + scrollX + (warningRect.width - iconSize) / 2f
+                            val iconTop = warningRect.top + scrollY + (warningRect.height - iconSize) / 2f
+                            translate(iconLeft, iconTop) {
+                                with(warningPainter) { draw(Size(iconSize, iconSize), colorFilter = warningTint) }
+                            }
                         }
                     }
                 }
@@ -526,7 +561,7 @@ private fun TemplateTextSurface(
                         val scrollX = if (singleLine) scrollState.value.toFloat() else 0f
                         val scrollY = if (!singleLine) scrollState.value.toFloat() else 0f
                         val hit = findHitChip(
-                            drawnChips = latestChips,
+                            drawnChips = latestChips(),
                             point = Offset(down.position.x + scrollX, down.position.y + scrollY),
                             touchPaddingPx = touchPaddingPx,
                         ) ?: continue
@@ -623,32 +658,20 @@ private fun findHitChip(
     return null
 }
 
-private fun computeAnchorInWindow(
+private fun computeAnchorLocalRect(
     target: VariablePickerTarget,
     layout: TextLayoutResult,
     placements: List<ChipPlacement>,
     drawnChips: List<DrawnChip>,
-    boxOrigin: Offset,
-    scrollOffset: Float,
-    singleLine: Boolean,
-): PopupAnchor? {
-    val scrollX = if (singleLine) -scrollOffset else 0f
-    val scrollY = if (!singleLine) -scrollOffset else 0f
-    val localRect = when (target) {
-        is VariablePickerTarget.Insert -> {
-            val visualOffset = rawOffsetToVisual(target.slashStart, placements)
-                .coerceIn(0, layout.layoutInput.text.length)
-            layout.getCursorRect(visualOffset)
-        }
-        is VariablePickerTarget.Replace -> {
-            drawnChips.firstOrNull { it.placement.token == target.token }?.rects?.firstOrNull() ?: return null
-        }
+): Rect? = when (target) {
+    is VariablePickerTarget.Insert -> {
+        val visualOffset = rawOffsetToVisual(target.slashStart, placements)
+            .coerceIn(0, layout.layoutInput.text.length)
+        layout.getCursorRect(visualOffset)
     }
-    return PopupAnchor(
-        left = (boxOrigin.x + localRect.left + scrollX).roundToInt(),
-        top = (boxOrigin.y + localRect.top + scrollY).roundToInt(),
-        bottom = (boxOrigin.y + localRect.bottom + scrollY).roundToInt(),
-    )
+    is VariablePickerTarget.Replace -> {
+        drawnChips.firstOrNull { it.placement.token == target.token }?.rects?.firstOrNull()
+    }
 }
 
 @Composable
@@ -657,7 +680,10 @@ private fun VariablePickerPopup(
     activeVariable: TemplateVariable?,
     isGranted: (TemplateVariable) -> Boolean,
     language: Language,
-    anchor: PopupAnchor,
+    localAnchorRect: Rect,
+    boxOrigin: Offset,
+    scrollState: ScrollState,
+    singleLine: Boolean,
     fieldLeft: Int,
     fieldWidth: Int,
     onSelect: (TemplateVariable) -> Unit,
@@ -671,7 +697,26 @@ private fun VariablePickerPopup(
         WindowInsets.ime.getBottom(density),
         WindowInsets.navigationBars.getBottom(density),
     )
+    fun anchorFor(scrollX: Int, scrollY: Int) = PopupAnchor(
+        left = (boxOrigin.x + localAnchorRect.left + scrollX).roundToInt(),
+        top = (boxOrigin.y + localAnchorRect.top + scrollY).roundToInt(),
+        bottom = (boxOrigin.y + localAnchorRect.bottom + scrollY).roundToInt(),
+    )
 
+    val latestOnDismiss by rememberUpdatedState(onDismiss)
+    val safeBottomPx = (containerSize.height - safeBottomInsetPx).coerceAtLeast(safeTopPx)
+    val anchorVisible by remember(boxOrigin, localAnchorRect, scrollState, singleLine, safeTopPx, safeBottomPx) {
+        derivedStateOf {
+            val anchor = anchorFor(0, if (!singleLine) -scrollState.value else 0)
+            anchor.bottom >= safeTopPx && anchor.top <= safeBottomPx
+        }
+    }
+    if (!anchorVisible) {
+        LaunchedEffect(Unit) { latestOnDismiss() }
+        return
+    }
+
+    val initialScrollY = remember(localAnchorRect, boxOrigin, singleLine) { if (!singleLine) -scrollState.value else 0 }
     val edgeMarginPx = with(density) { 16.dp.roundToPx() }
     val safeLeft = if (fieldWidth > 0) (fieldLeft - edgeMarginPx * 2).coerceAtLeast(0) else 0
     val safeRight = if (fieldWidth > 0) (fieldLeft + fieldWidth + edgeMarginPx * 2).coerceAtMost(containerSize.width) else containerSize.width
@@ -679,35 +724,36 @@ private fun VariablePickerPopup(
         with(density) { 144.dp.roundToPx() },
         (safeRight - safeLeft - edgeMarginPx * 2).coerceAtLeast(1),
     )
-    val spec = computePopupLayout(
-        viewport = PopupViewport(
-            width = containerSize.width,
-            height = containerSize.height,
-            safeTop = safeTopPx,
-            safeBottom = (containerSize.height - safeBottomInsetPx).coerceAtLeast(safeTopPx),
-            edgeMargin = edgeMarginPx,
-            anchorGap = with(density) { 8.dp.roundToPx() },
-            safeLeft = safeLeft,
-            safeRight = safeRight,
-        ),
-        anchor = anchor,
-        constraints = PopupConstraints(
-            width = popupWidthPx,
-            minHeightCap = with(density) { 148.dp.roundToPx() },
-            maxHeightCap = with(density) { 236.dp.roundToPx() },
-            minAboveHeight = with(density) { 120.dp.roundToPx() },
-        ),
-    )
-    if (spec.maxHeight <= 0) return
 
-    val shadowPadH = 20.dp
-    val shadowPadTop = 16.dp
-    val shadowPadBottom = 26.dp
+    val viewport = PopupViewport(
+        height = containerSize.height,
+        safeTop = safeTopPx,
+        safeBottom = safeBottomPx,
+        edgeMargin = edgeMarginPx,
+        anchorGap = with(density) { 8.dp.roundToPx() },
+        safeLeft = safeLeft,
+        safeRight = safeRight,
+    )
+    val constraints = PopupConstraints(
+        width = popupWidthPx,
+        minHeightCap = with(density) { 148.dp.roundToPx() },
+        maxHeightCap = with(density) { 236.dp.roundToPx() },
+        minAboveHeight = with(density) { 120.dp.roundToPx() },
+    )
+    val baseSpec = computePopupLayout(viewport, anchorFor(0, initialScrollY), constraints)
+    if (baseSpec.maxHeight <= 0) {
+        LaunchedEffect(Unit) { latestOnDismiss() }
+        return
+    }
+
+    val shadowPadH = 14.dp
+    val shadowPadTop = 10.dp
+    val shadowPadBottom = 16.dp
     val shadowPadHPx = with(density) { shadowPadH.roundToPx() }
     val shadowPadTopPx = with(density) { shadowPadTop.roundToPx() }
     val shadowPadBottomPx = with(density) { shadowPadBottom.roundToPx() }
 
-    val positionProvider = remember(spec, shadowPadHPx, shadowPadTopPx, shadowPadBottomPx) {
+    val positionProvider = remember(viewport, constraints, localAnchorRect, boxOrigin, scrollState, singleLine, shadowPadHPx, shadowPadTopPx, shadowPadBottomPx) {
         object : PopupPositionProvider {
             override fun calculatePosition(
                 anchorBounds: IntRect,
@@ -716,15 +762,17 @@ private fun VariablePickerPopup(
                 popupContentSize: IntSize,
             ): IntOffset {
                 val cardHeight = (popupContentSize.height - shadowPadTopPx - shadowPadBottomPx).coerceAtLeast(0)
+                val liveAnchor = anchorFor(if (singleLine) -scrollState.value else 0, if (!singleLine) -scrollState.value else 0)
+                val spec = computePopupLayout(viewport, liveAnchor, constraints)
                 return IntOffset(spec.x - shadowPadHPx, spec.resolveY(cardHeight) - shadowPadTopPx)
             }
         }
     }
 
     val popupWidthDp = with(density) { popupWidthPx.toDp() }
-    val maxHeightDp = with(density) { spec.maxHeight.toDp() }
+    val maxHeightDp = with(density) { baseSpec.maxHeight.toDp() }
     val pickerLabel = stringResource(R.string.forward_variable_picker)
-    val origin = if (spec.placeAbove) TransformOrigin(0.5f, 1f) else TransformOrigin(0.5f, 0f)
+    val origin = if (baseSpec.placeAbove) TransformOrigin(0.5f, 1f) else TransformOrigin(0.5f, 0f)
 
     val revealAlpha = remember { Animatable(0f) }
     val revealScale = remember { Animatable(0.96f) }
@@ -738,7 +786,7 @@ private fun VariablePickerPopup(
         onDismissRequest = onDismiss,
         properties = PopupProperties(
             focusable = false,
-            dismissOnBackPress = true,
+            dismissOnBackPress = false,
             dismissOnClickOutside = true,
             clippingEnabled = true,
         ),
@@ -753,7 +801,7 @@ private fun VariablePickerPopup(
                 }
                 .padding(start = shadowPadH, end = shadowPadH, top = shadowPadTop, bottom = shadowPadBottom),
         ) {
-            Column(
+            Box(
                 Modifier
                     .width(popupWidthDp)
                     .heightIn(max = maxHeightDp)
@@ -761,48 +809,52 @@ private fun VariablePickerPopup(
                     .clip(PickerShape)
                     .background(Color.White)
                     .border(1.dp, Palette.Ink.copy(alpha = 0.10f), PickerShape)
-                    .semantics { contentDescription = pickerLabel }
-                    .verticalScroll(rememberScrollState())
-                    .padding(5.dp),
-                verticalArrangement = Arrangement.spacedBy(2.dp),
+                    .semantics { contentDescription = pickerLabel },
             ) {
-                items.forEach { variable ->
-                    val missing = !isGranted(variable)
-                    val selected = !missing && variable == activeVariable
-                    val chipColors = variable.chipColor()
-                    Row(
-                        Modifier
-                            .fillMaxWidth()
-                            .height(34.dp)
-                            .clip(PickerRowShape)
-                            .background(if (selected) chipColors.background else Color.Transparent)
-                            .clickable(role = Role.Button) {
-                                if (missing) onMissingPermission(variable) else onSelect(variable)
-                            }
-                            .padding(horizontal = 10.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(9.dp),
-                    ) {
-                        Box(
+                Column(
+                    Modifier
+                        .verticalScroll(rememberScrollState())
+                        .padding(5.dp),
+                    verticalArrangement = Arrangement.spacedBy(2.dp),
+                ) {
+                    items.forEach { variable ->
+                        val missing = !isGranted(variable)
+                        val selected = !missing && variable == activeVariable
+                        val chipColors = variable.chipColor()
+                        Row(
                             Modifier
-                                .size(8.dp)
-                                .clip(CircleShape)
-                                .background(if (missing) Palette.Outline.copy(alpha = 0.45f) else chipColors.accent),
-                        )
-                        Text(
-                            text = variable.displayName(language),
-                            style = Type.Label.copy(
-                                fontSize = ChipFontSize,
-                                fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Medium,
-                            ),
-                            color = when {
-                                missing -> Palette.Muted.copy(alpha = 0.62f)
-                                selected -> chipColors.foreground
-                                else -> Palette.Ink
-                            },
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                        )
+                                .fillMaxWidth()
+                                .height(34.dp)
+                                .clip(PickerRowShape)
+                                .background(if (selected) chipColors.background else Color.Transparent)
+                                .clickable(role = Role.Button) {
+                                    if (missing) onMissingPermission(variable) else onSelect(variable)
+                                }
+                                .padding(horizontal = 10.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(9.dp),
+                        ) {
+                            Box(
+                                Modifier
+                                    .size(8.dp)
+                                    .clip(CircleShape)
+                                    .background(if (missing) Palette.Outline.copy(alpha = 0.45f) else chipColors.accent),
+                            )
+                            Text(
+                                text = variable.displayName(language),
+                                style = Type.Label.copy(
+                                    fontSize = ChipFontSize,
+                                    fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Medium,
+                                ),
+                                color = when {
+                                    missing -> Palette.Muted.copy(alpha = 0.62f)
+                                    selected -> chipColors.foreground
+                                    else -> Palette.Ink
+                                },
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                            )
+                        }
                     }
                 }
             }
@@ -812,16 +864,16 @@ private fun VariablePickerPopup(
 
 private fun Modifier.popupSoftShadow(cornerRadius: Dp): Modifier = drawWithCache {
     val radiusPx = cornerRadius.toPx()
-    val ambientOffsetY = 8.dp.toPx()
+    val ambientOffsetY = 6.dp.toPx()
     val ambientSpread = 1.dp.toPx()
     val ambientPaint = AndroidPaint(AndroidPaint.ANTI_ALIAS_FLAG).apply {
         color = Palette.Ink.copy(alpha = 0.16f).toArgb()
-        maskFilter = BlurMaskFilter(18.dp.toPx(), BlurMaskFilter.Blur.NORMAL)
+        maskFilter = BlurMaskFilter(12.dp.toPx(), BlurMaskFilter.Blur.NORMAL)
     }
     val contactOffsetY = 2.dp.toPx()
     val contactPaint = AndroidPaint(AndroidPaint.ANTI_ALIAS_FLAG).apply {
         color = Palette.Ink.copy(alpha = 0.10f).toArgb()
-        maskFilter = BlurMaskFilter(6.dp.toPx(), BlurMaskFilter.Blur.NORMAL)
+        maskFilter = BlurMaskFilter(5.dp.toPx(), BlurMaskFilter.Blur.NORMAL)
     }
     onDrawBehind {
         drawIntoCanvas { canvas ->

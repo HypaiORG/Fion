@@ -5,6 +5,7 @@ import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.EnterTransition
 import androidx.compose.animation.ExitTransition
 import androidx.compose.animation.core.MutableTransitionState
+import androidx.compose.animation.core.rememberTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -21,12 +22,12 @@ import androidx.compose.foundation.layout.union
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.adaptive.allVerticalHingeBounds
 import androidx.compose.material3.adaptive.currentWindowAdaptiveInfoV2
+import androidx.compose.material3.adaptive.separatingHorizontalHingeBounds
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.Stable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
@@ -34,8 +35,10 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.staticCompositionLocalOf
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.pointerInput
@@ -55,7 +58,7 @@ import kotlin.math.max
 import kotlin.math.roundToInt
 
 @Immutable
-data class WindowPanes(val columns: List<IntRange>) {
+data class WindowPanes(val columns: List<IntRange>, val horizontalFold: Rect? = null) {
     val multi: Boolean get() = columns.size > 1
 
     fun split(lead: Int): List<IntRange> {
@@ -88,6 +91,7 @@ fun currentWindowPanes(): WindowPanes {
     val widthPx = LocalWindowInfo.current.containerSize.width
     val folds = adaptive.windowPosture.allVerticalHingeBounds
         .map { it.left.roundToInt() until it.right.roundToInt() }
+    val horizontalFold = adaptive.windowPosture.separatingHorizontalHingeBounds.firstOrNull()
     val columns = computePaneSpans(
         start = insets.getLeft(density, layoutDirection) + margin,
         end = widthPx - insets.getRight(density, layoutDirection) - margin,
@@ -98,7 +102,7 @@ fun currentWindowPanes(): WindowPanes {
         minWidth = with(density) { PaneMinWidth.roundToPx() },
         folds = folds,
     )
-    return WindowPanes(columns)
+    return WindowPanes(columns, horizontalFold)
 }
 
 internal fun computePaneSpans(
@@ -171,17 +175,26 @@ fun PaneRow(panes: WindowPanes, lead: Int = 1, content: @Composable () -> Unit) 
     }
 }
 
+@Stable
 internal class PaneOverlaySpec(
-    val token: Any,
-    val onDismiss: () -> Unit,
-    val enter: EnterTransition,
-    val exit: ExitTransition,
-    val content: @Composable BoxScope.() -> Unit,
-)
+    onDismiss: () -> Unit,
+    enter: EnterTransition,
+    exit: ExitTransition,
+    contentAlignment: Alignment,
+    content: @Composable () -> Unit,
+) {
+    var onDismiss by mutableStateOf(onDismiss)
+    var enter by mutableStateOf(enter)
+    var exit by mutableStateOf(exit)
+    var contentAlignment by mutableStateOf(contentAlignment)
+    var content by mutableStateOf(content)
+}
 
 @Stable
 internal class PaneOverlayHost {
     var active by mutableStateOf<PaneOverlaySpec?>(null)
+        internal set
+    var pendingAfterExit: (() -> Unit)? = null
         internal set
 }
 
@@ -207,14 +220,19 @@ internal fun PaneOverlay(
     onDismiss: () -> Unit,
     enter: EnterTransition,
     exit: ExitTransition,
-    content: @Composable BoxScope.() -> Unit,
+    contentAlignment: Alignment,
+    content: @Composable () -> Unit,
 ) {
-    val token = remember { Any() }
-    val spec = PaneOverlaySpec(token, onDismiss, enter, exit, content)
-    SideEffect { host.active = spec }
-    DisposableEffect(host, token) {
+    val spec = remember { PaneOverlaySpec(onDismiss, enter, exit, contentAlignment, content) }
+    spec.onDismiss = onDismiss
+    spec.enter = enter
+    spec.exit = exit
+    spec.contentAlignment = contentAlignment
+    spec.content = content
+    DisposableEffect(host, spec) {
+        host.active = spec
         onDispose {
-            if (host.active?.token === token) host.active = null
+            if (host.active === spec) host.active = null
         }
     }
 }
@@ -224,16 +242,18 @@ private fun BoxScope.PaneOverlayLayer(host: PaneOverlayHost) {
     val active = host.active
     var exiting by remember { mutableStateOf<PaneOverlaySpec?>(null) }
     val shown = remember { MutableTransitionState(false) }
+    if (active != null && exiting !== active) exiting = active
+    shown.targetState = active != null
     val spec = active ?: exiting
-    SideEffect {
-        if (active != null) exiting = active
-        shown.targetState = active != null
-    }
     LaunchedEffect(shown.currentState, shown.isIdle, active) {
-        if (active == null && shown.isIdle && !shown.currentState) exiting = null
+        if (active == null && shown.isIdle && !shown.currentState) {
+            exiting = null
+            val after = host.pendingAfterExit
+            host.pendingAfterExit = null
+            after?.invoke()
+        }
     }
     if (spec == null) return
-    val closeLabel = stringResource(R.string.close)
     BackHandler(enabled = active != null) { active?.onDismiss?.invoke() }
     Box(
         Modifier
@@ -241,9 +261,36 @@ private fun BoxScope.PaneOverlayLayer(host: PaneOverlayHost) {
             .semantics {
                 dialog()
                 isTraversalGroup = true
-            }
+            },
+    ) {
+        OverlayBackdrop(
+            shown = shown,
+            scrimEnabled = active != null,
+            onScrimClick = { active?.onDismiss?.invoke() },
+            enter = spec.enter,
+            exit = spec.exit,
+            contentAlignment = spec.contentAlignment,
+        ) { key(spec) { spec.content() } }
+    }
+}
+
+@Composable
+internal fun OverlayBackdrop(
+    shown: MutableTransitionState<Boolean>,
+    scrimEnabled: Boolean,
+    onScrimClick: () -> Unit,
+    enter: EnterTransition,
+    exit: ExitTransition,
+    contentAlignment: Alignment,
+    content: @Composable () -> Unit,
+) {
+    val closeLabel = stringResource(R.string.close)
+    val transition = rememberTransition(shown, label = "overlay")
+    Box(
+        Modifier
+            .fillMaxSize()
             .then(
-                if (active == null) {
+                if (!scrimEnabled) {
                     Modifier.pointerInput(Unit) {
                         awaitPointerEventScope {
                             while (true) awaitPointerEvent(PointerEventPass.Initial).changes.forEach { it.consume() }
@@ -254,7 +301,7 @@ private fun BoxScope.PaneOverlayLayer(host: PaneOverlayHost) {
                 },
             ),
     ) {
-        AnimatedVisibility(shown, enter = fadeIn(tween(200)), exit = fadeOut(tween(150))) {
+        transition.AnimatedVisibility({ it }, enter = fadeIn(tween(200)), exit = fadeOut(tween(150))) {
             Box(
                 Modifier
                     .fillMaxSize()
@@ -262,16 +309,14 @@ private fun BoxScope.PaneOverlayLayer(host: PaneOverlayHost) {
                     .clickable(
                         interactionSource = null,
                         indication = null,
-                        enabled = active != null,
+                        enabled = scrimEnabled,
                         onClickLabel = closeLabel,
-                        onClick = { active?.onDismiss?.invoke() },
+                        onClick = onScrimClick,
                     ),
             )
         }
-        AnimatedVisibility(shown, Modifier.matchParentSize(), enter = spec.enter, exit = spec.exit) {
-            key(spec.token) {
-                Box(Modifier.fillMaxSize(), content = spec.content)
-            }
+        transition.AnimatedVisibility({ it }, Modifier.align(contentAlignment), enter = enter, exit = exit) {
+            content()
         }
     }
 }

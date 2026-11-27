@@ -6,7 +6,6 @@ import android.provider.CallLog
 import com.hypai.fion.forward.CallLogReader
 import com.hypai.fion.forward.CallLogSnapshot
 import com.hypai.fion.forward.ForwardEvent
-import com.hypai.fion.forward.LoggedMissedCall
 import com.hypai.fion.forward.TemplateVariable
 import java.time.Instant
 import java.time.ZoneId
@@ -16,7 +15,6 @@ import kotlinx.coroutines.withContext
 private val SENTINEL_HIDDEN_NUMBERS = setOf("-1", "-2", "-3")
 
 private data class RawMissedCall(
-    val id: Long,
     val number: String,
     val matchKey: String,
     val dateMs: Long,
@@ -58,17 +56,18 @@ class SystemCallLog(
     private val context: Context,
     private val sims: SimDirectory,
     private val now: () -> Long,
-    private val zone: () -> ZoneId = ZoneId::systemDefault,
+    private val zone: () -> ZoneId,
 ) : CallLogReader {
     override suspend fun read(afterId: Long?, usedVariables: Set<TemplateVariable>): CallLogSnapshot? =
         withContext(Dispatchers.IO) {
             if (!context.isGranted(Manifest.permission.READ_CALL_LOG)) return@withContext null
             try {
-                if (afterId == null) return@withContext CallLogSnapshot(latestId(), emptyList())
+                if (afterId == null) return@withContext latestId()?.let { CallLogSnapshot(it, emptyList()) }
                 val receivedAt = now()
                 val rawMissed = mutableListOf<RawMissedCall>()
                 var maxId: Long = afterId
-                context.contentResolver.query(
+                var sawRow = false
+                val rows = context.contentResolver.query(
                     CallLog.Calls.CONTENT_URI,
                     arrayOf(
                         CallLog.Calls._ID,
@@ -84,14 +83,15 @@ class SystemCallLog(
                     "${CallLog.Calls._ID} > ?",
                     arrayOf(afterId.toString()),
                     "${CallLog.Calls._ID} ASC",
-                )?.use { rows ->
+                ) ?: return@withContext null
+                rows.use {
                     while (rows.moveToNext()) {
+                        sawRow = true
                         maxId = rows.getLong(0)
                         if (rows.getInt(1) != CallLog.Calls.MISSED_TYPE) continue
                         val presentation = if (rows.isNull(6)) null else rows.getInt(6)
                         val number = normalizeCallNumber(rows.getString(2), presentation)
                         rawMissed += RawMissedCall(
-                            id = maxId,
                             number = number,
                             matchKey = callerMatchKey(number, rows.getString(7)),
                             dateMs = rows.getLong(3),
@@ -101,7 +101,10 @@ class SystemCallLog(
                         )
                     }
                 }
-                if (rawMissed.isEmpty()) return@withContext CallLogSnapshot(maxId, emptyList())
+                if (rawMissed.isEmpty()) {
+                    val resolvedMaxId = if (sawRow) maxId else minOf(afterId, latestId() ?: return@withContext null)
+                    return@withContext CallLogSnapshot(resolvedMaxId, emptyList())
+                }
 
                 val currentZone = zone()
                 val includeCount = TemplateVariable.CallCount in usedVariables
@@ -118,15 +121,12 @@ class SystemCallLog(
                     } else {
                         1
                     }
-                    LoggedMissedCall(
-                        id = row.id,
-                        event = ForwardEvent.MissedCall(
-                            from = row.number,
-                            sim = simResolver(row.accountComponent, row.accountId, row.viaNumber),
-                            occurredAtMs = row.dateMs,
-                            receivedAtMs = receivedAt,
-                            countToday = countToday,
-                        ),
+                    ForwardEvent.MissedCall(
+                        from = row.number,
+                        sim = simResolver(row.accountComponent, row.accountId, row.viaNumber),
+                        occurredAtMs = row.dateMs,
+                        receivedAtMs = receivedAt,
+                        countToday = countToday,
                     )
                 }
                 CallLogSnapshot(maxId, missed)
@@ -135,14 +135,14 @@ class SystemCallLog(
             }
         }
 
-    private fun latestId(): Long =
+    private fun latestId(): Long? =
         context.contentResolver.query(
             CallLog.Calls.CONTENT_URI.buildUpon().appendQueryParameter(CallLog.Calls.LIMIT_PARAM_KEY, "1").build(),
             arrayOf(CallLog.Calls._ID),
             null,
             null,
             "${CallLog.Calls._ID} DESC",
-        )?.use { if (it.moveToFirst()) it.getLong(0) else 0L } ?: 0L
+        )?.use { if (it.moveToFirst()) it.getLong(0) else 0L }
 
     private fun queryMissedTimestampsByKey(rows: List<RawMissedCall>, zone: ZoneId): Map<String, List<Long>> {
         val keys = rows.mapNotNull { it.matchKey.takeIf(String::isNotBlank) }.toSet()

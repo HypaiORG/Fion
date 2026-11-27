@@ -24,13 +24,13 @@ class MemoryStore<T>(initial: T) : DataStore<T> {
 class MemoryOutbox : Outbox {
     val items = mutableListOf<Message>()
 
-    override suspend fun enqueue(messages: List<Message>, maxSize: Int) {
+    override suspend fun enqueue(messages: List<Message>, maxSize: Int): Int {
         for (message in messages) {
             if (items.none { it.id == message.id }) items += message
         }
-        if (items.size > maxSize) {
-            repeat(items.size - maxSize) { items.removeAt(0) }
-        }
+        val evicted = (items.size - maxSize).coerceAtLeast(0)
+        repeat(evicted) { items.removeAt(0) }
+        return evicted
     }
 
     override suspend fun purgeExpired(cutoffMs: Long): Int {
@@ -39,12 +39,11 @@ class MemoryOutbox : Outbox {
         return before - items.size
     }
 
-    override suspend fun list(kinds: Set<EventKind>): List<Message> =
-        items.filter { it.kind in kinds }
+    override suspend fun next(kinds: Set<EventKind>, skip: Set<String>): Message? =
+        items.firstOrNull { it.kind in kinds && it.id !in skip }
 
-    override suspend fun remove(id: String) {
+    override suspend fun remove(id: String): Boolean =
         items.removeAll { it.id == id }
-    }
 
     override suspend fun hasAny(kinds: Set<EventKind>): Boolean =
         items.any { it.kind in kinds }

@@ -19,8 +19,8 @@ class Draft<T>(initial: T) {
         private set
     private var dirty = false
 
-    fun edit(next: T) {
-        value = next
+    fun edit(transform: (T) -> T) {
+        value = transform(value)
         dirty = true
     }
 

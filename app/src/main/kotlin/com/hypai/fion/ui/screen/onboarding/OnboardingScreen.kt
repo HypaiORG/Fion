@@ -5,8 +5,8 @@ import androidx.annotation.StringRes
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedContentTransitionScope
 import androidx.compose.animation.ContentTransform
+import androidx.compose.animation.SizeTransform
 import androidx.compose.animation.animateColorAsState
-import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
@@ -30,13 +30,12 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.Icon
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -68,6 +67,7 @@ import com.hypai.fion.android.Readiness
 import com.hypai.fion.android.openAppDetails
 import com.hypai.fion.android.openBatteryExemption
 import com.hypai.fion.forward.PermissionGroup
+import com.hypai.fion.ui.design.Icon
 import com.hypai.fion.ui.design.IconBadge
 import com.hypai.fion.ui.design.Icons
 import com.hypai.fion.ui.design.Motion
@@ -75,6 +75,7 @@ import com.hypai.fion.ui.design.Palette
 import com.hypai.fion.ui.design.Pane
 import com.hypai.fion.ui.design.PaneRow
 import com.hypai.fion.ui.design.PrimaryButton
+import com.hypai.fion.ui.design.Text
 import com.hypai.fion.ui.design.Type
 import com.hypai.fion.ui.design.WindowPanes
 import com.hypai.fion.ui.design.currentWindowPanes
@@ -132,64 +133,74 @@ internal enum class OnboardingStep(
     ),
     ;
 
-    fun done(readiness: Readiness): Boolean = when (this) {
-        Sms -> readiness.sms
-        CallLog -> readiness.callLog
-        Phone -> readiness.phone
-        Notify -> readiness.notifications
-        Battery -> readiness.batteryUnrestricted
+    fun done(readiness: Readiness): Boolean = when (action) {
+        is StepAction.Grant -> readiness.allows(action.group)
+        StepAction.ExemptBattery -> readiness.batteryUnrestricted
     }
 }
 
 @Composable
 fun OnboardingScreen(readiness: Readiness, onFinish: () -> Unit) {
     val context = LocalContext.current
+    val latestFinish by rememberUpdatedState(onFinish)
     val plan = rememberSaveable { OnboardingStep.entries.filterNot { it.done(readiness) } }
     var cursor by rememberSaveable { mutableIntStateOf(0) }
+    var lastShownIndex by rememberSaveable { mutableIntStateOf(0) }
+    var requestedStep by rememberSaveable { mutableStateOf<OnboardingStep?>(null) }
     var outcomes by rememberSaveable { mutableStateOf(emptyMap<OnboardingStep, StepOutcome>()) }
     val index = plan.indices.firstOrNull { it >= cursor && !plan[it].done(readiness) }
     val request = rememberPermissionRequest { result ->
-        val at = index ?: return@rememberPermissionRequest
+        val targetStep = requestedStep ?: index?.let(plan::get) ?: return@rememberPermissionRequest
+        requestedStep = null
+        val at = plan.indexOf(targetStep)
         when (result) {
             PermissionOutcome.Granted -> Unit
             PermissionOutcome.Denied -> {
-                outcomes = outcomes + (plan[at] to StepOutcome.Denied)
-                cursor = at + 1
+                outcomes = outcomes + (targetStep to StepOutcome.Denied)
+                if (at >= cursor) cursor = at + 1
             }
-            PermissionOutcome.Blocked -> outcomes = outcomes + (plan[at] to StepOutcome.Blocked)
+            PermissionOutcome.Blocked -> outcomes = outcomes + (targetStep to StepOutcome.Blocked)
         }
     }
     if (index == null) {
-        LaunchedEffect(Unit) { onFinish() }
-        return
+        LaunchedEffect(Unit) { latestFinish() }
+        if (plan.isEmpty()) return
+    } else {
+        lastShownIndex = index
     }
-    val step = plan[index]
-    val previous = (0 until index).lastOrNull { !plan[it].done(readiness) }
-    BackHandler(enabled = previous != null) { previous?.let { cursor = it } }
+    val displayIndex = index ?: lastShownIndex.coerceIn(0, plan.lastIndex)
+    val step = plan[displayIndex]
+    val previous = (0 until displayIndex).lastOrNull { !plan[it].done(readiness) }
+    BackHandler(enabled = index != null && previous != null) { previous?.let { cursor = it } }
     val blocked = outcomes[step] == StepOutcome.Blocked
     val buttons: @Composable (Modifier) -> Unit = { modifier ->
         StepButtons(
             label = stringResource(if (blocked) R.string.onb_open_settings else step.button),
             modifier = modifier,
             onPrimary = {
+                if (index == null) return@StepButtons
                 when (val action = step.action) {
                     is StepAction.Grant if blocked -> context.openAppDetails()
-                    is StepAction.Grant -> request(action.group)
+                    is StepAction.Grant -> {
+                        requestedStep = step
+                        request(action.group)
+                    }
                     StepAction.ExemptBattery -> context.openBatteryExemption()
                 }
             },
             onSkip = {
+                if (index == null) return@StepButtons
                 if (!blocked) outcomes = outcomes + (step to StepOutcome.Skipped)
-                cursor = index + 1
+                cursor = displayIndex + 1
             },
         )
     }
     val panes = currentWindowPanes()
     if (panes.multi) {
-        val statuses = plan.mapIndexed { i, it -> stepStatus(it.done(readiness), i == index, outcomes[it]) }
+        val statuses = plan.mapIndexed { i, it -> stepStatus(it.done(readiness), i == displayIndex, outcomes[it]) }
         PaneStepPage(panes, plan, statuses, step, buttons)
     } else {
-        StepPage(plan, index, buttons)
+        StepPage(plan, displayIndex, buttons)
     }
 }
 
@@ -309,11 +320,14 @@ private fun StepNote(step: OnboardingStep) {
         Modifier
             .padding(horizontal = 20.dp)
             .fillMaxWidth()
-            .heightIn(min = 84.dp)
-            .animateContentSize(tween(200, easing = Motion.Standard))
             .glass(RoundedCornerShape(22.dp)),
     ) {
-        AnimatedContent(step, Modifier.fillMaxWidth(), transitionSpec = { stepTransition() }, label = "stepNote") {
+        AnimatedContent(
+            step,
+            Modifier.fillMaxWidth(),
+            transitionSpec = { stepTransition() using SizeTransform { _, _ -> tween(200, easing = Motion.Standard) } },
+            label = "stepNote",
+        ) {
             Row(
                 Modifier.fillMaxWidth().heightIn(min = 84.dp).padding(horizontal = 18.dp, vertical = 14.dp),
                 verticalAlignment = Alignment.CenterVertically,

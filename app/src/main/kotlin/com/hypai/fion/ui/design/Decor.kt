@@ -1,9 +1,10 @@
 package com.hypai.fion.ui.design
 
-import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.size
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.drawWithCache
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
@@ -33,15 +34,15 @@ private enum class Fade { TowardBottomStart, TowardTopStart }
 
 fun svgPath(data: String): Path = PathParser().parsePathString(data).toPath()
 
-private val EnvelopeFold = svgPath("M24 58 L68 88 L112 58")
-private val EnvelopeTrail = svgPath("M84 50 C98 40 108 34 122 28")
-private val EnvelopeWingTop = svgPath("M156 6 L120 22 L134 27 Z")
-private val EnvelopeWingBottom = svgPath("M156 6 L134 27 L139 40 Z")
-private val ShieldOutline = svgPath("M50 6 L88 20 V52 C88 78 70 96 50 104 C30 96 12 78 12 52 V20 Z")
-private val ShieldHalf = svgPath("M50 6 L88 20 V52 C88 78 70 96 50 104 Z")
-private val ShieldTick = svgPath("M33 54 L46 67 L68 42")
-private val SimOutline = svgPath("M22 10 H80 L106 36 V124 A8 8 0 0 1 98 132 H22 A8 8 0 0 1 14 124 V18 A8 8 0 0 1 22 10 Z")
-private val SimContacts = svgPath("M60 64 V108 M32 86 H88 M46 64 V76 M74 98 V108")
+private val EnvelopeFold by lazy(LazyThreadSafetyMode.NONE) { svgPath("M24 58 L68 88 L112 58") }
+private val EnvelopeTrail by lazy(LazyThreadSafetyMode.NONE) { svgPath("M84 50 C98 40 108 34 122 28") }
+private val EnvelopeWingTop by lazy(LazyThreadSafetyMode.NONE) { svgPath("M156 6 L120 22 L134 27 Z") }
+private val EnvelopeWingBottom by lazy(LazyThreadSafetyMode.NONE) { svgPath("M156 6 L134 27 L139 40 Z") }
+private val ShieldOutline by lazy(LazyThreadSafetyMode.NONE) { svgPath("M50 6 L88 20 V52 C88 78 70 96 50 104 C30 96 12 78 12 52 V20 Z") }
+private val ShieldHalf by lazy(LazyThreadSafetyMode.NONE) { svgPath("M50 6 L88 20 V52 C88 78 70 96 50 104 Z") }
+private val ShieldTick by lazy(LazyThreadSafetyMode.NONE) { svgPath("M33 54 L46 67 L68 42") }
+private val SimOutline by lazy(LazyThreadSafetyMode.NONE) { svgPath("M22 10 H80 L106 36 V124 A8 8 0 0 1 98 132 H22 A8 8 0 0 1 14 124 V18 A8 8 0 0 1 22 10 Z") }
+private val SimContacts by lazy(LazyThreadSafetyMode.NONE) { svgPath("M60 64 V108 M32 86 H88 M46 64 V76 M74 98 V108") }
 
 private fun diagonal(from: Color, to: Color, topLeft: Offset, size: Size): Brush =
     Brush.linearGradient(listOf(from, to), topLeft, Offset(topLeft.x + size.width, topLeft.y + size.height))
@@ -60,23 +61,28 @@ private fun Decor(
     modifier: Modifier,
     draw: DrawScope.() -> Unit,
 ) {
-    Canvas(
-        modifier.size(width, height).graphicsLayer {
-            alpha = opacity
-            rotationZ = rotation
-            compositingStrategy = CompositingStrategy.Offscreen
-        },
-    ) {
-        scale(size.width / viewport.width, size.height / viewport.height, pivot = Offset.Zero, block = draw)
-        val (start, end) = when (fade) {
-            Fade.TowardBottomStart -> Offset(size.width, 0f) to Offset(0f, size.height)
-            Fade.TowardTopStart -> Offset(size.width, size.height) to Offset.Zero
-        }
-        drawRect(
-            Brush.linearGradient(0.35f to Color.Black, 0.9f to Color.Transparent, start = start, end = end),
-            blendMode = BlendMode.DstIn,
-        )
-    }
+    Box(
+        modifier
+            .size(width, height)
+            .graphicsLayer {
+                alpha = opacity
+                rotationZ = rotation
+                compositingStrategy = CompositingStrategy.Offscreen
+            }
+            .drawWithCache {
+                val (start, end) = when (fade) {
+                    Fade.TowardBottomStart -> Offset(size.width, 0f) to Offset(0f, size.height)
+                    Fade.TowardTopStart -> Offset(size.width, size.height) to Offset.Zero
+                }
+                val mask = Brush.linearGradient(0.35f to Color.Black, 0.9f to Color.Transparent, start = start, end = end)
+                val sx = size.width / viewport.width
+                val sy = size.height / viewport.height
+                onDrawBehind {
+                    scale(sx, sy, pivot = Offset.Zero, block = draw)
+                    drawRect(mask, blendMode = BlendMode.DstIn)
+                }
+            },
+    )
 }
 
 @Composable
@@ -95,10 +101,7 @@ fun EnvelopeDecor(modifier: Modifier = Modifier) {
             navy.copy(alpha = 0.3f),
             style = Stroke(1.5f, cap = StrokeCap.Round, pathEffect = PathEffect.dashPathEffect(floatArrayOf(2f, 6f))),
         )
-        drawPath(
-            EnvelopeWingTop,
-            diagonal(navy.copy(alpha = 0.35f), navy.copy(alpha = 0.6f), Offset(120f, 6f), Size(36f, 21f)),
-        )
+        drawPath(EnvelopeWingTop, diagonal(navy.copy(alpha = 0.35f), navy.copy(alpha = 0.6f), Offset(120f, 6f), Size(36f, 21f)))
         drawPath(EnvelopeWingBottom, navy.copy(alpha = 0.45f))
     }
 }
@@ -110,11 +113,7 @@ fun ShieldDecor(modifier: Modifier = Modifier) {
         drawPath(ShieldOutline, diagonal(SheenColor, navy.copy(alpha = 0.16f), Offset(12f, 6f), Size(76f, 98f)))
         drawPath(ShieldOutline, RimColor, style = Stroke(1.2f))
         drawPath(ShieldHalf, navy.copy(alpha = 0.10f))
-        drawPath(
-            ShieldTick,
-            navy.copy(alpha = 0.35f),
-            style = Stroke(5f, cap = StrokeCap.Round, join = StrokeJoin.Round),
-        )
+        drawPath(ShieldTick, navy.copy(alpha = 0.35f), style = Stroke(5f, cap = StrokeCap.Round, join = StrokeJoin.Round))
     }
 }
 
@@ -175,34 +174,37 @@ enum class SimMetal(val stops: List<Color>, val rim: Color, val ink: Color, val 
     }
 }
 
-private val SimCardViewport = Size(24f, 32f)
-private val SimCardOutline = svgPath("M4 0H17L24 7V28A4 4 0 0 1 20 32H4A4 4 0 0 1 0 28V4A4 4 0 0 1 4 0Z")
+private val SimCardOutline by lazy(LazyThreadSafetyMode.NONE) {
+    svgPath("M4 0H17L24 7V28A4 4 0 0 1 20 32H4A4 4 0 0 1 0 28V4A4 4 0 0 1 4 0Z")
+}
 private val MetalStops = listOf(0f, 0.38f, 0.52f, 0.78f, 1f)
+private val SimRimStroke = Stroke(0.8f)
 
 @Composable
-fun MetalSim(slot: Int?, modifier: Modifier = Modifier) {
+fun MetalSim(slot: Int?, modifier: Modifier = Modifier, width: Dp = 24.dp, height: Dp = 32.dp) {
     val metal = SimMetal.of(slot)
     val measurer = rememberTextMeasurer()
     val digit = slot?.let { (it + 1).toString() }
-    val numberSize = with(LocalDensity.current) { 15.dp.toSp() }
-    Canvas(modifier.size(24.dp, 32.dp)) {
-        val unit = size.width / SimCardViewport.width
-        scale(unit, Offset.Zero) {
-            val body = Brush.linearGradient(
-                *MetalStops.zip(metal.stops).toTypedArray(),
-                start = Offset.Zero,
-                end = Offset(SimCardViewport.width, SimCardViewport.height),
-            )
-            drawPath(SimCardOutline, body)
-            drawPath(SimCardOutline, metal.rim.copy(alpha = 0.55f), style = Stroke(0.8f))
-            drawLine(Color.White.copy(alpha = 0.8f), Offset(4f, 1.2f), Offset(16.5f, 1.2f), 0.8f, StrokeCap.Round)
-        }
-        if (digit != null) {
-            val style = TextStyle(fontSize = numberSize, fontWeight = FontWeight.Bold)
-            val text = measurer.measure(digit, style)
-            val origin = Offset((size.width - text.size.width) / 2f, size.height * 0.56f - text.size.height / 2f)
-            drawText(text, Color.White.copy(alpha = 0.7f), origin + Offset(0f, 0.7f * unit))
-            drawText(text, metal.ink, origin)
-        }
-    }
+    val numberSize = with(LocalDensity.current) { (height * (15f / 32f)).toSp() }
+    Box(
+        modifier.size(width, height).drawWithCache {
+            val unit = size.width / 24f
+            val body = Brush.linearGradient(*MetalStops.zip(metal.stops).toTypedArray(), end = Offset(24f, 32f))
+            val measured = digit?.let {
+                val layout = measurer.measure(it, TextStyle(fontSize = numberSize, fontWeight = FontWeight.Bold))
+                layout to Offset((size.width - layout.size.width) / 2f, size.height * 0.56f - layout.size.height / 2f)
+            }
+            onDrawBehind {
+                scale(unit, Offset.Zero) {
+                    drawPath(SimCardOutline, body)
+                    drawPath(SimCardOutline, metal.rim.copy(alpha = 0.55f), style = SimRimStroke)
+                    drawLine(Color.White.copy(alpha = 0.8f), Offset(4f, 1.2f), Offset(16.5f, 1.2f), 0.8f, StrokeCap.Round)
+                }
+                measured?.let { (text, origin) ->
+                    drawText(text, Color.White.copy(alpha = 0.7f), origin + Offset(0f, 0.7f * unit))
+                    drawText(text, metal.ink, origin)
+                }
+            }
+        },
+    )
 }

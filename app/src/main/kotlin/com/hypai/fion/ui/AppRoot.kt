@@ -28,8 +28,10 @@ import androidx.compose.runtime.saveable.rememberSaveableStateHolder
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.runtime.staticCompositionLocalOf
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.layer.drawLayer
 import androidx.compose.ui.graphics.rememberGraphicsLayer
@@ -75,12 +77,14 @@ import com.hypai.fion.ui.screen.SettingsScreen
 import com.hypai.fion.ui.screen.forward.ForwardScreen
 import com.hypai.fion.ui.screen.onboarding.OnboardingScreen
 import com.hypai.fion.ui.screen.privacy.PrivacyScreen
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.serialization.Serializable
 
 @Serializable
@@ -117,7 +121,7 @@ class MainViewModel(private val app: AppContainer) : ViewModel() {
     }
 
     fun resetStats() {
-        viewModelScope.launch { app.coordinator.resetStats() }
+        viewModelScope.launch { app.stateStore.resetStats() }
     }
 
     fun finishOnboarding() {
@@ -129,7 +133,6 @@ class MainViewModel(private val app: AppContainer) : ViewModel() {
     }
 
     fun onForeground() {
-        app.coordinator.refreshReadiness()
         viewModelScope.launch { app.coordinator.onForeground() }
     }
 }
@@ -150,23 +153,45 @@ fun currentLanguage(): Language = Language.valueOf(stringResource(R.string.langu
 
 val LocalSwitchLanguage = staticCompositionLocalOf<(Language) -> Unit> { error("LanguageCrossfade is missing") }
 
+private const val LANGUAGE_SWITCH_TIMEOUT_MS = 1_000L
+
 @Composable
 private fun LanguageCrossfade(content: @Composable () -> Unit) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val layer = rememberGraphicsLayer()
     val language by rememberUpdatedState(currentLanguage())
+    var capturing by remember { mutableStateOf(false) }
     var frozen by remember { mutableStateOf<ImageBitmap?>(null) }
+    var activeSwitch by remember { mutableStateOf<Job?>(null) }
     val fade = remember { Animatable(1f) }
     val switch: (Language) -> Unit = remember(context, scope, layer) {
         { target ->
-            scope.launch {
-                frozen = layer.toImageBitmap()
-                fade.snapTo(1f)
-                context.applyAppLanguage(target)
-                snapshotFlow { language }.first { it == target }
-                fade.animateTo(0f, tween(300, easing = Motion.Standard))
-                frozen = null
+            if (target != language) {
+                activeSwitch?.cancel()
+                activeSwitch = scope.launch {
+                    try {
+                        capturing = true
+                        withFrameNanos {}
+                        withFrameNanos {}
+                        val snapshot = if (layer.size.width > 0 && layer.size.height > 0) layer.toImageBitmap() else null
+                        capturing = false
+                        if (snapshot != null) {
+                            frozen = snapshot
+                            fade.snapTo(1f)
+                        }
+                        context.applyAppLanguage(target)
+                        val switched = withTimeoutOrNull(LANGUAGE_SWITCH_TIMEOUT_MS) {
+                            snapshotFlow { language }.first { it == target }
+                        }
+                        if (snapshot != null && switched != null) {
+                            fade.animateTo(0f, tween(300, easing = Motion.Standard))
+                        }
+                    } finally {
+                        capturing = false
+                        frozen = null
+                    }
+                }
             }
         }
     }
@@ -175,8 +200,12 @@ private fun LanguageCrossfade(content: @Composable () -> Unit) {
             Modifier
                 .fillMaxSize()
                 .drawWithContent {
-                    layer.record { this@drawWithContent.drawContent() }
-                    drawLayer(layer)
+                    if (capturing) {
+                        layer.record { this@drawWithContent.drawContent() }
+                        drawLayer(layer)
+                    } else {
+                        drawContent()
+                    }
                     frozen?.let { drawImage(it, alpha = fade.value) }
                 },
         ) { content() }
@@ -224,20 +253,22 @@ private fun AppRoot() {
     val backStack = rememberNavBackStack(if (onboardingDone) Screen.Home else Screen.Onboarding)
     val panes = currentWindowPanes()
     val multi by rememberUpdatedState(panes.multi)
+    val horizontalFold by rememberUpdatedState(panes.horizontalFold)
     val stateHolder = rememberSaveableStateHolder()
     val saveableDecorator = rememberSaveableStateHolderNavEntryDecorator<NavKey>(stateHolder)
     val decorators = remember(saveableDecorator) { listOf(saveableDecorator) }
-    val render: @Composable (Screen) -> Unit = { screen -> Destination(screen, uiState, model, backStack, multi) }
+    val render: @Composable (Screen) -> Unit = { screen -> Destination(screen, uiState, model, backStack, multi, horizontalFold) }
     val paneStrategy = remember(panes, stateHolder) {
         PaneSceneStrategy(panes, stateHolder, render)
     }
+    val sceneStrategies = remember(paneStrategy) { listOf(paneStrategy, SinglePageSceneStrategy) }
 
     CompositionLocalProvider(LocalRefreshReadiness provides model::refreshReadiness) {
         NavDisplay(
             backStack = backStack,
-            onBack = { backStack.popOne() },
+            onBack = { if (multi) backStack.popToRoot() else backStack.popOne() },
             entryDecorators = decorators,
-            sceneStrategies = listOf(paneStrategy, SinglePageSceneStrategy),
+            sceneStrategies = sceneStrategies,
             transitionSpec = {
                 if (initialState is SinglePageScene && targetState is SinglePageScene) Motion.PushPage else InstantTransition
             },
@@ -330,6 +361,7 @@ private fun Destination(
     model: MainViewModel,
     backStack: NavBackStack<NavKey>,
     multi: Boolean,
+    horizontalFold: Rect?,
 ) {
     val current = uiState.value ?: return
     val onOpen: (Screen) -> Unit = { backStack.open(it, multi) }
@@ -350,6 +382,7 @@ private fun Destination(
             settings = current.settings,
             stats = current.stats,
             readiness = current.readiness,
+            horizontalFold = horizontalFold,
             onUpdate = model::updateSettings,
             onOpenSettings = if (multi) null else ({ onOpen(Screen.Settings) }),
             onOpenBark = { onOpen(Screen.Bark) },

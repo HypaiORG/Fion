@@ -6,22 +6,22 @@ import com.hypai.fion.forward.TemplatePart
 import com.hypai.fion.forward.TemplateVariable
 import com.hypai.fion.forward.normalizeParts
 
-private const val TOKEN_OPEN = '\uFFF9'
-private const val TOKEN_CLOSE = '\uFFFB'
+internal const val TOKEN_OPEN = '\uFFF9'
+internal const val TOKEN_CLOSE = '\uFFFB'
 private const val CHIP_OUTER_GAP = '\u200A'
 private const val CHIP_INNER_PAD = '\u00A0'
 private const val CHIP_WARNING_SLOT = '\u2003'
 private const val WORD_JOINER = '\u2060'
 
-data class BufferToken(
+internal data class BufferToken(
     val start: Int,
     val end: Int,
     val variable: TemplateVariable,
 )
 
-fun encodeVariableToken(variable: TemplateVariable): String = "$TOKEN_OPEN${variable.id}$TOKEN_CLOSE"
+internal fun encodeVariableToken(variable: TemplateVariable): String = "$TOKEN_OPEN${variable.id}$TOKEN_CLOSE"
 
-fun encodeTemplateParts(parts: List<TemplatePart>): String = buildString {
+internal fun encodeTemplateParts(parts: List<TemplatePart>): String = buildString {
     for (part in parts) {
         when (part) {
             is TemplatePart.Text -> append(part.value)
@@ -30,45 +30,70 @@ fun encodeTemplateParts(parts: List<TemplatePart>): String = buildString {
     }
 }
 
-fun findBufferTokens(buffer: String, kind: EventKind? = null): List<BufferToken> {
-    if (!buffer.contains(TOKEN_OPEN)) return emptyList()
-    val tokens = mutableListOf<BufferToken>()
+private inline fun scanSentinels(
+    buffer: String,
+    kind: EventKind,
+    onValid: (start: Int, end: Int, variable: TemplateVariable) -> Unit = { _, _, _ -> },
+    onInvalid: (start: Int, end: Int) -> Unit = { _, _ -> },
+) {
     var cursor = 0
     val len = buffer.length
     while (cursor < len) {
-        val open = buffer.indexOf(TOKEN_OPEN, cursor)
-        if (open < 0) break
-        var scan = open + 1
-        while (scan < len && buffer[scan] != TOKEN_OPEN && buffer[scan] != TOKEN_CLOSE) scan++
-        if (scan < len && buffer[scan] == TOKEN_CLOSE) {
-            val variable = TemplateVariable.fromId(buffer.substring(open + 1, scan))
-            if (variable != null && (kind == null || variable.appliesTo(kind))) {
-                tokens.add(BufferToken(open, scan + 1, variable))
+        when (buffer[cursor]) {
+            TOKEN_CLOSE -> {
+                onInvalid(cursor, cursor + 1)
+                cursor++
             }
-            cursor = scan + 1
-        } else {
-            cursor = if (scan > open + 1) scan else open + 1
+            TOKEN_OPEN -> {
+                var scan = cursor + 1
+                while (scan < len && buffer[scan] != TOKEN_OPEN && buffer[scan] != TOKEN_CLOSE) scan++
+                if (scan < len && buffer[scan] == TOKEN_CLOSE) {
+                    val variable = TemplateVariable.fromId(buffer.substring(cursor + 1, scan))
+                    if (variable != null && variable.appliesTo(kind)) {
+                        onValid(cursor, scan + 1, variable)
+                    } else {
+                        onInvalid(cursor, scan + 1)
+                    }
+                    cursor = scan + 1
+                } else {
+                    onInvalid(cursor, cursor + 1)
+                    cursor++
+                }
+            }
+            else -> cursor++
         }
     }
-    return tokens
 }
 
-fun decodeTemplateParts(buffer: String, kind: EventKind? = null): List<TemplatePart> {
+internal fun findBufferTokens(buffer: String, kind: EventKind): List<BufferToken> {
+    if (!buffer.contains(TOKEN_OPEN)) return emptyList()
+    return buildList { scanSentinels(buffer, kind, onValid = { s, e, v -> add(BufferToken(s, e, v)) }) }
+}
+
+internal fun findInvalidSentinelRanges(buffer: String, kind: EventKind): List<IntRange> {
+    if (!buffer.contains(TOKEN_OPEN) && !buffer.contains(TOKEN_CLOSE)) return emptyList()
+    return buildList { scanSentinels(buffer, kind, onInvalid = { s, e -> add(s until e) }) }
+}
+
+internal fun decodeTemplateParts(buffer: String, kind: EventKind): List<TemplatePart> {
     if (buffer.isEmpty()) return emptyList()
-    val tokens = findBufferTokens(buffer, kind)
-    if (tokens.isEmpty()) return listOf(TemplatePart.Text(buffer))
-    val parts = ArrayList<TemplatePart>(tokens.size * 2 + 1)
-    var cursor = 0
-    for (token in tokens) {
-        if (token.start > cursor) parts.add(TemplatePart.Text(buffer.substring(cursor, token.start)))
-        parts.add(TemplatePart.Var(token.variable))
-        cursor = token.end
+    if (!buffer.contains(TOKEN_OPEN) && !buffer.contains(TOKEN_CLOSE)) return listOf(TemplatePart.Text(buffer))
+    val parts = mutableListOf<TemplatePart>()
+    var textStart = 0
+    fun flush(end: Int) {
+        if (end > textStart) parts.add(TemplatePart.Text(buffer.substring(textStart, end)))
     }
-    if (cursor < buffer.length) parts.add(TemplatePart.Text(buffer.substring(cursor)))
+    scanSentinels(
+        buffer = buffer,
+        kind = kind,
+        onValid = { s, e, v -> flush(s); parts.add(TemplatePart.Var(v)); textStart = e },
+        onInvalid = { s, e -> flush(s); textStart = e },
+    )
+    flush(buffer.length)
     return normalizeParts(parts)
 }
 
-data class ChipPlacement(
+internal data class ChipPlacement(
     val token: BufferToken,
     val visualStart: Int,
     val visualEnd: Int,
@@ -79,7 +104,7 @@ data class ChipPlacement(
     val warningSlotIndex: Int? = null,
 )
 
-fun formatChipText(label: String, missingPermission: Boolean = false): String {
+internal fun formatChipText(label: String, missingPermission: Boolean = false): String {
     val out = StringBuilder(label.length * 2 + 8)
     out.append(CHIP_OUTER_GAP).append(CHIP_INNER_PAD)
     if (missingPermission) {
@@ -93,11 +118,11 @@ fun formatChipText(label: String, missingPermission: Boolean = false): String {
     return out.toString()
 }
 
-fun computeChipPlacements(
+internal fun computeChipPlacements(
     buffer: String,
     language: Language,
-    kind: EventKind? = null,
-    isGranted: (TemplateVariable) -> Boolean = { true },
+    kind: EventKind,
+    isGranted: (TemplateVariable) -> Boolean,
 ): List<ChipPlacement> {
     val tokens = findBufferTokens(buffer, kind)
     if (tokens.isEmpty()) return emptyList()
@@ -122,7 +147,7 @@ fun computeChipPlacements(
     }
 }
 
-fun rawOffsetToVisual(rawOffset: Int, placements: List<ChipPlacement>): Int {
+internal fun rawOffsetToVisual(rawOffset: Int, placements: List<ChipPlacement>): Int {
     var delta = 0
     for (placement in placements) {
         val token = placement.token
@@ -135,19 +160,19 @@ fun rawOffsetToVisual(rawOffset: Int, placements: List<ChipPlacement>): Int {
     return rawOffset + delta
 }
 
-data class BufferChange(
+internal data class BufferChange(
     val originalStart: Int,
     val originalEnd: Int,
     val newStart: Int,
     val newEnd: Int,
 )
 
-sealed interface BufferFix {
+internal sealed interface BufferFix {
     data class DeleteRange(val start: Int, val end: Int) : BufferFix
     data class MoveInsertedOutsideToken(val insertedStart: Int, val insertedEnd: Int, val targetIndex: Int) : BufferFix
 }
 
-fun diffSingleChange(
+internal fun diffSingleChange(
     old: CharSequence,
     new: CharSequence,
     oldSelectionMin: Int,
@@ -179,7 +204,7 @@ fun diffSingleChange(
     return BufferChange(prefix, oldEnd, prefix, newEnd)
 }
 
-fun computeAtomicEditFixes(originalTokens: List<BufferToken>, change: BufferChange): List<BufferFix> {
+internal fun computeAtomicEditFixes(originalTokens: List<BufferToken>, change: BufferChange): List<BufferFix> {
     if (originalTokens.isEmpty()) return emptyList()
     if (change.originalStart == change.originalEnd) {
         val inside = originalTokens.firstOrNull { change.originalStart > it.start && change.originalStart < it.end }
@@ -205,33 +230,31 @@ fun computeAtomicEditFixes(originalTokens: List<BufferToken>, change: BufferChan
     return fixes
 }
 
-sealed interface VariablePickerTarget {
+internal sealed interface VariablePickerTarget {
     data class Insert(val slashStart: Int, val replaceEnd: Int) : VariablePickerTarget
     data class Replace(val token: BufferToken) : VariablePickerTarget
 }
 
-fun isSlashTriggerChar(c: Char): Boolean = c == '/' || c == '／'
+private fun isSlashTriggerChar(c: Char): Boolean = c == '/' || c == '／'
 
-fun detectNewSlashTrigger(
+internal fun detectNewSlashTrigger(
     previousText: String,
     currentText: String,
     selectionStart: Int,
     selectionEnd: Int,
-    kind: EventKind? = null,
+    kind: EventKind,
 ): VariablePickerTarget.Insert? {
     if (selectionStart != selectionEnd || selectionStart <= 0) return null
-    if (currentText.length != previousText.length + 1) return null
     val slashIndex = selectionStart - 1
     if (!isSlashTriggerChar(currentText[slashIndex])) return null
-    if (!currentText.regionMatches(0, previousText, 0, slashIndex)) return null
-    val tailLen = previousText.length - slashIndex
-    if (!currentText.regionMatches(selectionStart, previousText, slashIndex, tailLen)) return null
+    val change = diffSingleChange(previousText, currentText, slashIndex, selectionStart) ?: return null
+    if (change.newStart != slashIndex || change.newEnd != selectionStart) return null
     val insideToken = findBufferTokens(currentText, kind).any { slashIndex > it.start && slashIndex < it.end }
     if (insideToken) return null
     return VariablePickerTarget.Insert(slashStart = slashIndex, replaceEnd = selectionStart)
 }
 
-fun filterVariables(
+private fun filterVariables(
     variables: List<TemplateVariable>,
     query: String,
 ): List<TemplateVariable> {
@@ -246,7 +269,7 @@ fun filterVariables(
     }
 }
 
-fun resolveSlashTarget(
+internal fun resolveSlashTarget(
     current: VariablePickerTarget.Insert,
     text: String,
     selectionStart: Int,
@@ -265,7 +288,7 @@ fun resolveSlashTarget(
     return current.copy(replaceEnd = selectionStart)
 }
 
-fun pickerItemsForTarget(
+internal fun pickerItemsForTarget(
     target: VariablePickerTarget,
     text: String,
     variables: List<TemplateVariable>,
@@ -278,31 +301,30 @@ fun pickerItemsForTarget(
     }
 }
 
-data class PopupViewport(
-    val width: Int,
+internal data class PopupViewport(
     val height: Int,
     val safeTop: Int,
     val safeBottom: Int,
     val edgeMargin: Int,
     val anchorGap: Int,
     val safeLeft: Int = 0,
-    val safeRight: Int = width,
+    val safeRight: Int,
 )
 
-data class PopupAnchor(
+internal data class PopupAnchor(
     val left: Int,
     val top: Int,
     val bottom: Int,
 )
 
-data class PopupConstraints(
+internal data class PopupConstraints(
     val width: Int,
     val minHeightCap: Int,
     val maxHeightCap: Int,
     val minAboveHeight: Int,
 )
 
-data class PopupLayoutSpec(
+internal data class PopupLayoutSpec(
     val x: Int,
     val placeAbove: Boolean,
     val maxHeight: Int,
@@ -321,7 +343,7 @@ data class PopupLayoutSpec(
     }
 }
 
-fun computePopupLayout(
+internal fun computePopupLayout(
     viewport: PopupViewport,
     anchor: PopupAnchor,
     constraints: PopupConstraints,

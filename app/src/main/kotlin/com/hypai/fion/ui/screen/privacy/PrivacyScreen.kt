@@ -2,8 +2,6 @@ package com.hypai.fion.ui.screen.privacy
 
 import androidx.annotation.StringRes
 import androidx.compose.animation.AnimatedContent
-import androidx.compose.animation.animateContentSize
-import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -23,8 +21,6 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.Icon
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -52,6 +48,7 @@ import com.hypai.fion.forward.PermissionGroup
 import com.hypai.fion.store.Settings
 import com.hypai.fion.ui.design.BadgeStyle
 import com.hypai.fion.ui.design.GlassCard
+import com.hypai.fion.ui.design.Icon
 import com.hypai.fion.ui.design.IconBadge
 import com.hypai.fion.ui.design.Icons
 import com.hypai.fion.ui.design.InfoNote
@@ -60,6 +57,8 @@ import com.hypai.fion.ui.design.Motion
 import com.hypai.fion.ui.design.Palette
 import com.hypai.fion.ui.design.SegmentedChoice
 import com.hypai.fion.ui.design.ShieldDecor
+import com.hypai.fion.ui.design.StatusPill
+import com.hypai.fion.ui.design.Text
 import com.hypai.fion.ui.design.Type
 import com.hypai.fion.ui.screen.look
 
@@ -282,7 +281,6 @@ private fun PermissionGuideCard(guide: PermissionGuide, status: PermissionStatus
 @Composable
 private fun BarkServerCard(serverHost: String) {
     val isSelfHosted = !serverHost.equals(DEFAULT_BARK_SERVER, ignoreCase = true)
-    val chainDesc = stringResource(R.string.privacy_server_chain_desc)
 
     GlassCard(padding = PaddingValues(16.dp), spacing = 12.dp) {
         StatusCardHeader(
@@ -311,7 +309,7 @@ private fun BarkServerCard(serverHost: String) {
             ) {
                 IconBadge(Icons.Globe, Palette.NavySurface, Palette.Navy, RoundedCornerShape(10.dp), size = 30.dp, iconSize = 16.dp)
                 Text(stringResource(R.string.privacy_server_official_title), style = Type.Label, fontWeight = FontWeight.SemiBold, color = Palette.Ink)
-                Text(stringResource(R.string.privacy_server_official_sub), style = MonoCaption.copy(fontSize = 11.sp), color = Palette.Navy)
+                Text(DEFAULT_BARK_SERVER, style = MonoCaption.copy(fontSize = 11.sp), color = Palette.Navy)
                 Text(stringResource(R.string.privacy_server_official_note), style = Type.Caption, color = Palette.Muted)
             }
 
@@ -337,6 +335,8 @@ private fun BarkServerCard(serverHost: String) {
             }
         }
 
+        val chainServerLabel = if (isSelfHosted) serverHost else stringResource(R.string.privacy_server_chain_cf)
+        val chainDesc = stringResource(R.string.privacy_server_chain_desc, chainServerLabel)
         Row(
             Modifier
                 .fillMaxWidth()
@@ -348,7 +348,7 @@ private fun BarkServerCard(serverHost: String) {
         ) {
             ChainStep(Icons.Smartphone, stringResource(R.string.privacy_server_chain_phone), Modifier.weight(1f))
             FlowArrow(Modifier.width(16.dp).height(14.dp), Palette.Green)
-            ChainStep(Icons.Cloud, stringResource(R.string.privacy_server_chain_cf), Modifier.weight(1.3f), highlight = true)
+            ChainStep(Icons.Cloud, chainServerLabel, Modifier.weight(1.3f), highlight = true)
             FlowArrow(Modifier.width(16.dp).height(14.dp), Palette.Green)
             ChainStep(Icons.Bell, stringResource(R.string.privacy_server_chain_device), Modifier.weight(1f))
         }
@@ -357,13 +357,14 @@ private fun BarkServerCard(serverHost: String) {
     }
 }
 
+private val PreviewStates = listOf(true, false)
+
 @Composable
 private fun AesLockCard(cipherLabel: String?) {
     var previewLocked by rememberSaveable { mutableStateOf(true) }
     val encrypted = cipherLabel != null
     val lockedLabel = stringResource(R.string.privacy_aes_mode_locked)
     val plainLabel = stringResource(R.string.privacy_aes_mode_plain)
-    val previewOptions = listOf(true to lockedLabel, false to plainLabel)
 
     GlassCard(padding = PaddingValues(16.dp), spacing = 12.dp) {
         StatusCardHeader(
@@ -383,13 +384,17 @@ private fun AesLockCard(cipherLabel: String?) {
 
         Text(stringResource(R.string.privacy_aes_desc), style = ReadableLine, color = Palette.Muted)
 
-        SegmentedChoice(options = previewOptions, selected = previewLocked, onSelect = { previewLocked = it })
+        SegmentedChoice(
+            options = PreviewStates,
+            selected = previewLocked,
+            label = { if (it) lockedLabel else plainLabel },
+            onSelect = { previewLocked = it },
+        )
 
         Column(
             Modifier
                 .fillMaxWidth()
                 .privacyPanel(DiagramShape)
-                .animateContentSize(tween(220, easing = Motion.Standard))
                 .padding(12.dp),
             verticalArrangement = Arrangement.spacedBy(10.dp),
         ) {
@@ -508,12 +513,7 @@ private fun RedLinesCard() {
                         Modifier.weight(1f).fillMaxHeight().privacyPanel().padding(12.dp),
                         verticalArrangement = Arrangement.spacedBy(6.dp),
                     ) {
-                        Box(
-                            Modifier.size(26.dp).clip(CircleShape).background(Palette.CrimsonSurface),
-                            contentAlignment = Alignment.Center,
-                        ) {
-                            Icon(Icons.Ban, contentDescription = null, Modifier.size(14.dp), tint = Palette.Crimson)
-                        }
+                        IconBadge(Icons.Ban, Palette.CrimsonSurface, Palette.Crimson, CircleShape, size = 26.dp, iconSize = 14.dp)
                         Text(stringResource(line.title), style = Type.Label, fontWeight = FontWeight.SemiBold, color = Palette.Ink)
                         Text(stringResource(line.desc), style = Type.Caption, color = Palette.Muted)
                     }

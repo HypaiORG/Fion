@@ -48,21 +48,21 @@ class SystemAccessTest {
         val defaults = Settings()
 
         assertTrue(full.backgroundReady(persistentNotification = true))
-        assertEquals(PermissionHealth.Ready, full.health(defaults, Language.Zh))
+        assertEquals(PermissionHealth.Ready, full.health(defaults))
         assertFalse(full.backgroundReady(persistentNotification = false))
-        assertEquals(PermissionHealth.Partial, full.health(defaults.copy(persistentNotification = false), Language.Zh))
+        assertEquals(PermissionHealth.Partial, full.health(defaults.copy(persistentNotification = false)))
         assertEquals(
             PermissionHealth.Partial,
-            full.copy(granted = all - setOf(AppPermission.ReadPhoneState, AppPermission.ReadPhoneNumbers)).health(defaults, Language.Zh),
+            full.copy(granted = all - setOf(AppPermission.ReadPhoneState, AppPermission.ReadPhoneNumbers)).health(defaults),
         )
-        assertEquals(PermissionHealth.Partial, full.copy(granted = all - AppPermission.ReceiveSms).health(defaults, Language.Zh))
+        assertEquals(PermissionHealth.Partial, full.copy(granted = all - AppPermission.ReceiveSms).health(defaults))
         assertEquals(
             PermissionHealth.Blocked,
-            full.copy(granted = all - setOf(AppPermission.ReceiveSms, AppPermission.ReadCallLog)).health(defaults, Language.Zh),
+            full.copy(granted = all - setOf(AppPermission.ReceiveSms, AppPermission.ReadCallLog)).health(defaults),
         )
 
         val callOnly = Settings(channels = setOf(EventKind.MissedCall))
-        assertEquals(PermissionHealth.Ready, full.copy(granted = all - AppPermission.ReceiveSms).health(callOnly, Language.En))
+        assertEquals(PermissionHealth.Ready, full.copy(granted = all - AppPermission.ReceiveSms).health(callOnly))
 
         val smsNameOnly = Settings(channels = setOf(EventKind.Sms)).let { s ->
             s.withPush(
@@ -77,6 +77,6 @@ class SystemAccessTest {
         val stateOnly = full.copy(granted = all - AppPermission.ReadPhoneNumbers)
         assertTrue(stateOnly.allows(TemplateVariable.SimName))
         assertFalse(stateOnly.allows(TemplateVariable.SimNumber))
-        assertEquals(PermissionHealth.Ready, stateOnly.health(smsNameOnly, Language.Zh))
+        assertEquals(PermissionHealth.Ready, stateOnly.health(smsNameOnly))
     }
 }

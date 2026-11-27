@@ -19,6 +19,7 @@ import com.hypai.fion.forward.EventKind
 import com.hypai.fion.forward.Language
 import com.hypai.fion.forward.PermissionGroup
 import com.hypai.fion.forward.TemplateVariable
+import com.hypai.fion.forward.permission
 import com.hypai.fion.forward.requirement
 import com.hypai.fion.forward.requirements
 import com.hypai.fion.forward.usedVariables
@@ -36,28 +37,10 @@ val AppPermission.manifestName: String
         AppPermission.Notifications -> Manifest.permission.POST_NOTIFICATIONS
     }
 
-val PermissionGroup.permissions: Array<String>
-    get() = requirements.map(AppPermission::manifestName).toTypedArray()
-
-fun Context.isGranted(permission: AppPermission): Boolean = when (permission) {
-    AppPermission.Notifications -> notificationsEnabled()
-    else -> isGranted(permission.manifestName)
-}
-
-fun Context.isGranted(group: PermissionGroup): Boolean = group.requirements.all(::isGranted)
-
-fun Context.notificationsEnabled(): Boolean =
-    getSystemService(NotificationManager::class.java).areNotificationsEnabled()
-
 data class Readiness(
     val granted: Set<AppPermission>,
     val batteryUnrestricted: Boolean,
 ) {
-    val sms: Boolean get() = allows(AppPermission.ReceiveSms)
-    val callLog: Boolean get() = allows(AppPermission.ReadCallLog)
-    val phoneState: Boolean get() = allows(AppPermission.ReadPhoneState)
-    val phoneNumbers: Boolean get() = allows(AppPermission.ReadPhoneNumbers)
-    val phone: Boolean get() = allows(PermissionGroup.Phone)
     val notifications: Boolean get() = allows(AppPermission.Notifications)
 
     fun allows(permission: AppPermission): Boolean = permission in granted
@@ -76,25 +59,36 @@ data class Readiness(
 
 enum class PermissionHealth { Ready, Partial, Blocked }
 
-fun Readiness.health(settings: AppSettings, language: Language): PermissionHealth {
+fun Readiness.missingGroups(settings: AppSettings): List<PermissionGroup> {
     val active = EventKind.entries.filter(settings::forwards)
-    if (active.isEmpty()) return PermissionHealth.Ready
-    if (active.none(::allows)) return PermissionHealth.Blocked
-    val channelsReady = active.all(::allows)
-    val variablesReady = active.all { kind ->
-        settings.push(kind).template.usedVariables(kind, language).all(::allows)
-    }
-    return if (channelsReady && variablesReady && backgroundReady(settings.persistentNotification)) {
-        PermissionHealth.Ready
-    } else {
-        PermissionHealth.Partial
+    val channels = active.filterNot(::allows).map { it.permission }
+    val variables = active
+        .flatMap { kind -> settings.push(kind).template.usedVariables(kind) }
+        .filterNot(::allows)
+        .map(TemplateVariable::permission)
+        .sorted()
+    return (channels + variables).distinct()
+}
+
+fun Readiness.health(settings: AppSettings): PermissionHealth {
+    val active = EventKind.entries.filter(settings::forwards)
+    return when {
+        active.isEmpty() -> PermissionHealth.Ready
+        active.none(::allows) -> PermissionHealth.Blocked
+        missingGroups(settings).isEmpty() && backgroundReady(settings.persistentNotification) -> PermissionHealth.Ready
+        else -> PermissionHealth.Partial
     }
 }
 
-fun Context.readiness(): Readiness = Readiness(
-    granted = AppPermission.entries.filterTo(LinkedHashSet(), ::isGranted),
-    batteryUnrestricted = getSystemService(PowerManager::class.java).isIgnoringBatteryOptimizations(packageName),
-)
+fun Context.readiness(): Readiness {
+    val notifications = getSystemService(NotificationManager::class.java).areNotificationsEnabled()
+    return Readiness(
+        granted = AppPermission.entries.filterTo(LinkedHashSet()) {
+            if (it == AppPermission.Notifications) notifications else isGranted(it.manifestName)
+        },
+        batteryUnrestricted = getSystemService(PowerManager::class.java).isIgnoringBatteryOptimizations(packageName),
+    )
+}
 
 private fun Context.packageUri(): Uri = Uri.fromParts("package", packageName, null)
 

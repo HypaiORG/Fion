@@ -38,13 +38,13 @@ internal fun attachPhoneNumber(
 }
 
 class SimDirectory(private val context: Context) {
-    private val manager: SubscriptionManager get() = context.getSystemService(SubscriptionManager::class.java)
-    private val telephony: TelephonyManager get() = context.getSystemService(TelephonyManager::class.java)
+    private val manager: SubscriptionManager? get() = context.getSystemService(SubscriptionManager::class.java)
+    private val telephony: TelephonyManager? get() = context.getSystemService(TelephonyManager::class.java)
 
     private fun activeSubscriptions(): List<SubscriptionInfo> {
         if (!context.isGranted(Manifest.permission.READ_PHONE_STATE)) return emptyList()
         return try {
-            manager.activeSubscriptionInfoList.orEmpty()
+            manager?.activeSubscriptionInfoList.orEmpty()
         } catch (_: SecurityException) {
             emptyList()
         }
@@ -53,7 +53,7 @@ class SimDirectory(private val context: Context) {
     private fun allSubscriptions(): List<SubscriptionInfo> {
         if (!context.isGranted(Manifest.permission.READ_PHONE_STATE)) return emptyList()
         return try {
-            manager.allSubscriptionInfoList
+            manager?.allSubscriptionInfoList.orEmpty()
         } catch (_: SecurityException) {
             emptyList()
         }
@@ -62,7 +62,7 @@ class SimDirectory(private val context: Context) {
     private fun activeSubscription(subscriptionId: Int): SubscriptionInfo? {
         if (!context.isGranted(Manifest.permission.READ_PHONE_STATE)) return null
         return try {
-            manager.getActiveSubscriptionInfo(subscriptionId)
+            manager?.getActiveSubscriptionInfo(subscriptionId)
         } catch (_: SecurityException) {
             null
         }
@@ -70,10 +70,11 @@ class SimDirectory(private val context: Context) {
 
     private fun phoneNumber(subscriptionId: Int): String {
         if (!context.isGranted(Manifest.permission.READ_PHONE_NUMBERS)) return ""
+        val subManager = manager ?: return ""
         try {
-            manager.getPhoneNumber(subscriptionId).takeIf(String::isNotBlank)?.let { return it }
+            subManager.getPhoneNumber(subscriptionId).takeIf(String::isNotBlank)?.let { return it }
             for (source in PHONE_NUMBER_SOURCES) {
-                manager.getPhoneNumber(subscriptionId, source).takeIf(String::isNotBlank)?.let { return it }
+                subManager.getPhoneNumber(subscriptionId, source).takeIf(String::isNotBlank)?.let { return it }
             }
         } catch (_: SecurityException) {
         } catch (_: IllegalStateException) {
@@ -83,7 +84,7 @@ class SimDirectory(private val context: Context) {
     }
 
     private fun simOperatorName(subscriptionId: Int): String = try {
-        telephony.createForSubscriptionId(subscriptionId).simOperatorName.orEmpty()
+        telephony?.createForSubscriptionId(subscriptionId)?.simOperatorName.orEmpty()
     } catch (_: SecurityException) {
         ""
     }
@@ -135,7 +136,7 @@ class SimDirectory(private val context: Context) {
         val component = accountComponent?.let(ComponentName::unflattenFromString) ?: return null
         val account = PhoneAccountHandle(component, accountId ?: return null)
         return try {
-            telephony.getSubscriptionId(account).takeIf { it != SubscriptionManager.INVALID_SUBSCRIPTION_ID }
+            telephony?.getSubscriptionId(account)?.takeIf { it != SubscriptionManager.INVALID_SUBSCRIPTION_ID }
         } catch (_: SecurityException) {
             null
         } catch (_: UnsupportedOperationException) {

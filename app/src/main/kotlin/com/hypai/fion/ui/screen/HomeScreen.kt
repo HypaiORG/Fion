@@ -9,6 +9,7 @@ import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.togetherWith
+import androidx.compose.foundation.LocalIndication
 import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -30,7 +31,6 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -44,12 +44,6 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.TextAutoSize
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
-import androidx.compose.material3.Text
-import androidx.compose.material3.adaptive.currentWindowAdaptiveInfoV2
-import androidx.compose.material3.adaptive.separatingHorizontalHingeBounds
-import androidx.compose.material3.ripple
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
@@ -72,6 +66,8 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.graphics.vector.rememberVectorPainter
+import androidx.compose.ui.layout.AlignmentLine
+import androidx.compose.ui.layout.FirstBaseline
 import androidx.compose.ui.layout.Layout
 import androidx.compose.ui.layout.onPlaced
 import androidx.compose.ui.layout.positionInWindow
@@ -96,22 +92,20 @@ import androidx.compose.ui.unit.lerp
 import androidx.compose.ui.unit.sp
 import com.hypai.fion.R
 import com.hypai.fion.android.Readiness
+import com.hypai.fion.android.missingGroups
 import com.hypai.fion.android.openAppDetails
 import com.hypai.fion.bark.endpoint
 import com.hypai.fion.effectiveChannels
 import com.hypai.fion.forward.EventKind
-import com.hypai.fion.forward.Language
 import com.hypai.fion.forward.PermissionGroup
-import com.hypai.fion.forward.TemplateVariable
-import com.hypai.fion.forward.permission
-import com.hypai.fion.forward.usedVariables
 import com.hypai.fion.store.Settings
 import com.hypai.fion.store.Stats
-import com.hypai.fion.ui.currentLanguage
 import com.hypai.fion.ui.design.ActionRow
 import com.hypai.fion.ui.design.BadgeStyle
 import com.hypai.fion.ui.design.EnvelopeDecor
 import com.hypai.fion.ui.design.GlassCard
+import com.hypai.fion.ui.design.Icon
+import com.hypai.fion.ui.design.IconButton
 import com.hypai.fion.ui.design.Icons
 import com.hypai.fion.ui.design.LocalPaneOverlay
 import com.hypai.fion.ui.design.MetalSim
@@ -120,7 +114,9 @@ import com.hypai.fion.ui.design.Palette
 import com.hypai.fion.ui.design.ShieldDecor
 import com.hypai.fion.ui.design.SimDecor
 import com.hypai.fion.ui.design.SimMetal
+import com.hypai.fion.ui.design.StatusPill
 import com.hypai.fion.ui.design.StopwatchDecor
+import com.hypai.fion.ui.design.Text
 import com.hypai.fion.ui.design.Type
 import com.hypai.fion.ui.design.glass
 import com.hypai.fion.ui.design.pressScale
@@ -146,18 +142,24 @@ private fun FitText(
     modifier: Modifier = Modifier,
 ) {
     val measurer = rememberTextMeasurer()
-    val floor = style.copy(fontSize = minFontSize)
+    val floor = remember(style, minFontSize) { style.copy(fontSize = minFontSize) }
+    val stepAutoSize = remember(minFontSize, style.fontSize) {
+        TextAutoSize.StepBased(minFontSize = minFontSize, maxFontSize = style.fontSize)
+    }
     Layout(
         content = {
             candidates.forEach {
-                Text(it, style = style, maxLines = 1, autoSize = TextAutoSize.StepBased(minFontSize = minFontSize, maxFontSize = style.fontSize), color = color)
+                Text(it, style = style, maxLines = 1, autoSize = stepAutoSize, color = color)
             }
         },
         modifier = modifier.clearAndSetSemantics { contentDescription = candidates.first() },
     ) { measurables, constraints ->
         val fitting = candidates.indexOfFirst { measurer.measure(it, floor, maxLines = 1).size.width <= constraints.maxWidth }
         val text = measurables[if (fitting >= 0) fitting else candidates.lastIndex].measure(constraints)
-        layout(text.width, text.height) { text.place(0, 0) }
+        val baseline = text[FirstBaseline]
+        val lines: Map<AlignmentLine, Int> =
+            if (baseline != AlignmentLine.Unspecified) mapOf(FirstBaseline to baseline) else emptyMap()
+        layout(text.width, text.height, lines) { text.place(0, 0) }
     }
 }
 
@@ -166,17 +168,10 @@ internal sealed interface HomeNotice {
     data class Permission(val group: PermissionGroup) : HomeNotice
 }
 
-internal fun homeNotice(settings: Settings, readiness: Readiness, language: Language): HomeNotice? {
-    val active = EventKind.entries.filter(settings::forwards)
-    if (active.isEmpty()) return null
+internal fun homeNotice(settings: Settings, readiness: Readiness): HomeNotice? {
+    if (EventKind.entries.none(settings::forwards)) return null
     if (settings.bark.endpoint() == null) return HomeNotice.Bark
-    active.firstOrNull { !readiness.allows(it) }?.let { return HomeNotice.Permission(it.permission) }
-    val missing = active.asSequence()
-        .flatMap { kind -> settings.push(kind).template.usedVariables(kind, language) }
-        .filterNot(readiness::allows)
-        .map(TemplateVariable::permission)
-        .minByOrNull(PermissionGroup::ordinal)
-    return missing?.let(HomeNotice::Permission)
+    return readiness.missingGroups(settings).firstOrNull()?.let(HomeNotice::Permission)
 }
 
 @Composable
@@ -184,6 +179,7 @@ fun HomeScreen(
     settings: Settings,
     stats: Stats,
     readiness: Readiness,
+    horizontalFold: Rect?,
     onUpdate: ((Settings) -> Settings) -> Unit,
     onOpenSettings: (() -> Unit)?,
     onOpenBark: () -> Unit,
@@ -191,12 +187,10 @@ fun HomeScreen(
     val scroll = rememberScrollState()
     var askingPermission by rememberSaveable { mutableStateOf(false) }
     val context = LocalContext.current
-    val language = currentLanguage()
     val request = rememberPermissionRequest { if (it == PermissionOutcome.Blocked) context.openAppDetails() }
-    val notice = homeNotice(settings, readiness, language)
+    val notice = homeNotice(settings, readiness)
     val effectiveForwarding = settings.effectiveChannels(readiness).isNotEmpty()
     val targetKinds = settings.channels.ifEmpty { EventKind.entries.toSet() }
-    val horizontalFold = currentWindowAdaptiveInfoV2().windowPosture.separatingHorizontalHingeBounds.firstOrNull()
     val insetsModifier = if (LocalPaneOverlay.current == null) {
         Modifier.windowInsetsPadding(WindowInsets.systemBars.union(WindowInsets.displayCutout))
     } else {
@@ -220,7 +214,16 @@ fun HomeScreen(
                 if (onOpenSettings != null) {
                     IconButton(onClick = onOpenSettings) { Icon(Icons.Gear, contentDescription = stringResource(R.string.settings_title), tint = Palette.Ink) }
                 } else {
-                    StatusPill(effectiveForwarding)
+                    StatusPill(
+                        text = stringResource(if (effectiveForwarding) R.string.home_status_on else R.string.home_status_off),
+                        background = if (effectiveForwarding) Palette.NavySurface else Palette.Dormant,
+                        color = if (effectiveForwarding) Palette.NavyDeep else Palette.Muted,
+                        modifier = Modifier.padding(end = 6.dp).height(28.dp),
+                        dot = if (effectiveForwarding) Palette.Navy else Palette.Outline,
+                        style = Type.Secondary,
+                        fontWeight = FontWeight.Medium,
+                        padding = PaddingValues(horizontal = 12.dp),
+                    )
                 }
             }
         },
@@ -287,28 +290,6 @@ fun HomeScreen(
             prompt = PermissionPrompt.Forwarding(targetKinds.toList()) { onUpdate { it.withForwarding(true) } },
             readiness = readiness,
             onDismiss = { askingPermission = false },
-        )
-    }
-}
-
-@Composable
-private fun StatusPill(on: Boolean) {
-    Row(
-        Modifier
-            .padding(end = 6.dp)
-            .height(28.dp)
-            .clip(CircleShape)
-            .background(if (on) Palette.NavySurface else Palette.Dormant)
-            .padding(horizontal = 12.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(6.dp),
-    ) {
-        Box(Modifier.size(6.dp).clip(CircleShape).background(if (on) Palette.Navy else Palette.Outline))
-        Text(
-            stringResource(if (on) R.string.home_status_on else R.string.home_status_off),
-            style = Type.Secondary,
-            fontWeight = FontWeight.Medium,
-            color = if (on) Palette.NavyDeep else Palette.Muted,
         )
     }
 }
@@ -415,7 +396,7 @@ private fun PowerButton(on: Boolean, onToggle: () -> Unit) {
                 }
             }
             .border(1.dp, Color.White.copy(alpha = 0.7f), CircleShape)
-            .clickable(interaction, ripple(), role = Role.Switch) {
+            .clickable(interaction, LocalIndication.current, role = Role.Switch) {
                 haptics.toggle(!on)
                 onToggle()
             }

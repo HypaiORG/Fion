@@ -6,20 +6,19 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.Icon
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.draw.drawWithCache
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
@@ -36,8 +35,11 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.hypai.fion.R
+import com.hypai.fion.ui.design.Icon
 import com.hypai.fion.ui.design.Icons
 import com.hypai.fion.ui.design.Palette
+import com.hypai.fion.ui.design.StatusPill
+import com.hypai.fion.ui.design.Text
 import com.hypai.fion.ui.design.Type
 
 internal enum class StepOutcome { Denied, Skipped, Blocked }
@@ -65,9 +67,8 @@ private val RowHeight = 56.dp
 private val RowShape = RoundedCornerShape(20.dp)
 private val NodeSize = 40.dp
 private val LinkX = 27.dp
-private val LinkTop = 49.dp
 private val LinkWidth = 2.dp
-private val LinkHeight = 14.dp
+private val LinkGap = NodeSize / 2 + 1.dp
 private val ActiveRow = Color.White.copy(alpha = 0.72f)
 private val QuietNode = Color.White.copy(alpha = 0.55f)
 private val RedOrb = Radial(0.35f, 0.3f, 0.955f, 0f to Color(0xFFE58C82), 0.5f to Palette.Red, 1f to Palette.Crimson)
@@ -81,12 +82,15 @@ internal fun StepTimeline(plan: List<OnboardingStep>, statuses: List<StepStatus>
             .drawBehind {
                 val width = LinkWidth.toPx()
                 val x = LinkX.toPx()
+                val rowStep = size.height / statuses.size
+                val gap = LinkGap.toPx()
+                val radius = CornerRadius(width / 2)
                 for (i in 0 until statuses.lastIndex) {
                     drawRoundRect(
                         if (statuses[i] == StepStatus.Allowed) Palette.Navy else idleLink,
-                        Offset(x, i * RowHeight.toPx() + LinkTop.toPx()),
-                        Size(width, LinkHeight.toPx()),
-                        CornerRadius(width / 2),
+                        Offset(x, (i + 0.5f) * rowStep + gap),
+                        Size(width, rowStep - 2 * gap),
+                        radius,
                     )
                 }
             },
@@ -101,10 +105,10 @@ private fun StepRow(step: OnboardingStep, status: StepStatus) {
     Row(
         Modifier
             .fillMaxWidth()
-            .height(RowHeight)
+            .heightIn(min = RowHeight)
             .then(if (status.active) Modifier.background(ActiveRow, RowShape) else Modifier)
             .semantics(mergeDescendants = true) { stateDescription = statusText }
-            .padding(start = 8.dp, end = 14.dp),
+            .padding(start = 8.dp, end = 14.dp, top = 6.dp, bottom = 6.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(14.dp),
     ) {
@@ -129,14 +133,13 @@ private fun StepRow(step: OnboardingStep, status: StepStatus) {
             StepStatus.Current, StepStatus.Pending -> null
         }
         if (tag != null) {
-            Box(
-                Modifier
-                    .clearAndSetSemantics {}
-                    .heightIn(min = 24.dp)
-                    .background(tag.first, CircleShape)
-                    .padding(horizontal = 10.dp, vertical = 2.dp),
-                contentAlignment = Alignment.Center,
-            ) { Text(statusText, style = Type.Caption, fontWeight = FontWeight.SemiBold, color = tag.second, maxLines = 1) }
+            StatusPill(
+                text = statusText,
+                background = tag.first,
+                color = tag.second,
+                modifier = Modifier.clearAndSetSemantics {}.heightIn(min = 24.dp),
+                padding = PaddingValues(horizontal = 10.dp, vertical = 2.dp),
+            )
         }
     }
 }
@@ -172,12 +175,10 @@ private fun Modifier.orb(fill: Brush, ring: Color, glow: Color): Modifier =
         .shadow(6.dp, CircleShape, ambientColor = glow, spotColor = glow)
         .background(fill, CircleShape)
 
-private fun Modifier.dashedRing(color: Color): Modifier = drawBehind {
+private fun Modifier.dashedRing(color: Color): Modifier = drawWithCache {
     val width = 1.5.dp.toPx()
     val dash = 3.dp.toPx()
-    drawCircle(
-        color,
-        radius = size.minDimension / 2 - width / 2,
-        style = Stroke(width, pathEffect = PathEffect.dashPathEffect(floatArrayOf(dash, dash))),
-    )
+    val stroke = Stroke(width, pathEffect = PathEffect.dashPathEffect(floatArrayOf(dash, dash)))
+    val radius = size.minDimension / 2 - width / 2
+    onDrawBehind { drawCircle(color, radius = radius, style = stroke) }
 }

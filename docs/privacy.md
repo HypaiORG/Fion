@@ -31,7 +31,7 @@ HYPAI ORG operates no backend server for Fion and collects no user data. We do n
 
 Fion transmits notification data outside your device only through the delivery path you configure.
 
-- **User-Configured Bark Server**. Fion sends each push notification over HTTPS (`POST /push`) to the server entered in `Settings › Bark push settings`. If that server returns an HTTP redirect, Fion follows the redirect, which may route the request to another host chosen by that server.
+- **User-Configured Bark Server**. Fion sends each push notification over HTTPS (`POST /push`) to the server entered in `Settings › Bark push settings`. If that server returns an HTTP 307/308 redirect, Fion follows same-origin HTTPS redirects only (same host and port, up to 3 hops) and blocks cross-origin redirects or plaintext HTTP downgrades.
 - **Default and Self-Hosted Servers**. The default server `api.day.app` is operated independently by the Bark project, not by HYPAI ORG. Any self-hosted Bark server is operated by you or your chosen host.
 - **Apple Push Notification service (APNs)**. The Bark server relays the notification to your Apple devices through APNs, operated by Apple Inc.
 
@@ -41,7 +41,7 @@ Once a push notification leaves your device, its handling, logging, retention, a
 
 Fion stores the following data solely on your Android device to operate reliably.
 
-- **Application settings**. Your Bark server address, Device Key, optional AES encryption key and cipher settings, forwarding toggles, push templates, notification sound, notification level, archive preference, language, and boot auto-start preference.
+- **Application settings**. Your Bark server address, Device Key, optional AES encryption key and cipher settings, forwarding toggles, push templates, notification sound, notification level, archive preference, and boot auto-start preference (app display language is managed by Android's `LocaleManager`).
 - **Forwarding statistics**. Total forwarded SMS count, missed call count, failed delivery count, average delivery latency, and per-SIM delivery counts with SIM display name and carrier.
 - **Offline retry queue**. Rendered push title, body, SIM label, timestamp, and message ID for notifications that fail temporarily due to network or server errors.
 - **Internal runtime state**. Onboarding completion flag, the last processed call-log record ID watermark, and a locally generated secret used to compute deduplication message IDs.
@@ -52,7 +52,7 @@ We apply technical safeguards in transit and on your device to protect sensitive
 
 - **Encryption in transit**. Fion enforces HTTPS when connecting to the configured Bark server.
 - **Optional end-to-end payload encryption**. When you configure an AES encryption key (AES-128, AES-192, or AES-256 in CBC, GCM, or ECB mode), Fion encrypts the notification payload (title, body, group, sound, notification level, and archive flag) on your device before transmission. The `device_key`, deduplication message `id`, and initialization vector `iv` (when used by CBC or GCM) remain unencrypted so Bark can route and decrypt the notification. Only a party holding your AES key, normally your Bark app, can decrypt the payload.
-- **On-device isolation**. All local data is stored exclusively inside Fion's Android private app storage, isolated by the operating system. Android cloud backup (`allowBackup="false"`) and device-to-device data transfer are disabled so settings, keys, statistics, and queued notifications do not leave your device through system backup or migration.
+- **On-device isolation**. All local data (settings, runtime state, and offline retry queue) is stored exclusively inside Fion's Android private app storage, which other apps cannot read and which Android keeps encrypted with your lock-screen credential and inaccessible until you first unlock the device after it restarts. Android cloud backup (`allowBackup="false"`) and device-to-device data transfer are disabled so settings, keys, statistics, and queued notifications do not leave your device through system backup or migration.
 
 ## 6. Data Retention and Deletion
 

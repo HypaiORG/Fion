@@ -45,6 +45,7 @@ sealed interface HttpResult {
 }
 
 interface HttpTransport {
+    /** Returns [HttpResult.Failure] once [timeoutMs] elapses; callers set no other deadline. */
     suspend fun postJson(url: String, body: String, timeoutMs: Long): HttpResult
 }
 

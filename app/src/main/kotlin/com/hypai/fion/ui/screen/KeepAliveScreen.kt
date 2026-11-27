@@ -19,7 +19,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
@@ -45,6 +44,7 @@ import com.hypai.fion.ui.design.Palette
 import com.hypai.fion.ui.design.ScreenScaffold
 import com.hypai.fion.ui.design.SectionCard
 import com.hypai.fion.ui.design.SwitchRow
+import com.hypai.fion.ui.design.Text
 import com.hypai.fion.ui.design.Type
 
 private sealed interface Control {

@@ -71,7 +71,7 @@
 
     <string name="bark_endpoint_title">服务器配置</string>
     <string name="bark_endpoint_host">服务器地址</string>
-    <string name="bark_endpoint_host_error">请输入有效的服务器地址，如 api.day.app</string>
+    <string name="bark_endpoint_host_error">请输入有效的服务器地址，如 %1$s</string>
     <string name="bark_device_key_hint">从 Bark 首页复制，支持直接粘贴完整链接</string>
     <string name="bark_device_key_error">只能包含字母、数字、_ 和 -</string>
     <string name="bark_show_device_key">显示 Device Key</string>
@@ -155,7 +155,6 @@
     <string name="keep_intro">完成以下设置，避免系统限制导致漏转发</string>
     <string name="keep_permissions">转发所需权限</string>
     <string name="keep_settings">后台运行设置</string>
-    <string name="keep_pending">待处理</string>
     <string name="keep_enabled">已开启</string>
 
     <string name="onb_sms_title">允许接收\n新短信</string>
@@ -203,7 +202,7 @@
     <string name="privacy_flow_https_only_sub">可再加 AES 锁</string>
     <string name="privacy_flow_bark">你的 Bark</string>
     <string name="privacy_flow_no_server">不经飞鸿服务器 · 开发者看不见</string>
-    <string name="privacy_flow_desc">数据路径：你的手机经加密通道直达你指定的 Bark 服务器，不经过飞鸿服务器。</string>
+    <string name="privacy_flow_desc">数据路径：你的手机经 %1$s 直达 %2$s，不经过飞鸿服务器。</string>
     <string name="privacy_trust_no_server">无飞鸿服务器</string>
     <string name="privacy_trust_no_history">不翻旧记录</string>
     <string name="privacy_trust_no_backup">关闭云备份</string>
@@ -251,14 +250,13 @@
     <string name="privacy_perm_bg_block_title">不连任何第三方</string>
     <string name="privacy_perm_bg_block_sub">无广告 · 无统计上报</string>
     <string name="privacy_perm_bg_purpose">防系统清理漏转，把推送发到你的 Bark</string>
-    <string name="privacy_perm_bg_guard">只连你填的服务器（含 HTTPS 重定向），通知可关</string>
+    <string name="privacy_perm_bg_guard">只连你填的服务器（仅同源 HTTPS 重定向），通知可关</string>
 
     <string name="privacy_server_title">Bark 服务器你来选</string>
     <string name="privacy_server_badge_default">当前默认 · %1$s</string>
     <string name="privacy_server_badge_custom">当前自建 · %1$s</string>
     <string name="privacy_server_desc">不设飞鸿服务器，推送发给谁全由你决定。</string>
     <string name="privacy_server_official_title">默认服务器</string>
-    <string name="privacy_server_official_sub">api.day.app</string>
     <string name="privacy_server_official_note">Bark 官方，开箱即用</string>
     <string name="privacy_server_cf_tag">完全掌控</string>
     <string name="privacy_server_cf_title">Cloudflare 自建</string>
@@ -267,7 +265,7 @@
     <string name="privacy_server_chain_phone">你的手机</string>
     <string name="privacy_server_chain_cf">Cloudflare 自建</string>
     <string name="privacy_server_chain_device">你的设备</string>
-    <string name="privacy_server_chain_desc">自建链路：你的手机直连你的 Cloudflare 服务器再送达你的设备。</string>
+    <string name="privacy_server_chain_desc">自建链路：你的手机直连 %1$s 再送达你的设备。</string>
     <string name="privacy_server_tip">使用 Cloudflare 自建 Bark，再开启下方 AES 加密，从读取、传输到投递全部环节完全由你自己掌控。</string>
 
     <string name="privacy_aes_title">离开手机前先上锁</string>

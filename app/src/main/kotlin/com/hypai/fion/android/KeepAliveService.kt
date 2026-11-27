@@ -63,18 +63,17 @@ class KeepAliveService : Service() {
             return START_NOT_STICKY
         }
         val target = desired
-        if (intent != null && target is ServiceMode.Stopped) {
-            running = ServiceMode.Stopped
-            stopSelf(startId)
-            return START_NOT_STICKY
-        }
-        if (intent == null) {
-            running = ServiceMode.Running(watchCallLog = false)
-            appContainer.scope.launch { appContainer.coordinator.reconcile() }
-        } else {
-            val watch = (target as? ServiceMode.Running)?.watchCallLog
-                ?: intent.getBooleanExtra(EXTRA_WATCH_CALL_LOG, false)
-            syncCallLogObserver(watch)
+        when {
+            intent == null -> {
+                running = ServiceMode.Running(watchCallLog = false)
+                appContainer.scope.launch { appContainer.coordinator.reconcile() }
+            }
+            target is ServiceMode.Running -> syncCallLogObserver(target.watchCallLog)
+            else -> {
+                running = ServiceMode.Stopped
+                stopSelf(startId)
+                return START_NOT_STICKY
+            }
         }
         return START_STICKY
     }
@@ -166,7 +165,6 @@ class KeepAliveService : Service() {
         private const val CHANNEL_ID = "keep_alive"
         private const val NOTIFICATION_ID = 1
         private const val CALL_LOG_DEBOUNCE_MS = 300L
-        private const val EXTRA_WATCH_CALL_LOG = "watch_call_log"
 
         @Volatile
         private var running: ServiceMode = ServiceMode.Stopped
@@ -185,9 +183,8 @@ class KeepAliveService : Service() {
                 return
             }
             if (running == target && previous == target) return
-            val intent = Intent(context, KeepAliveService::class.java).putExtra(EXTRA_WATCH_CALL_LOG, watchCallLog)
             try {
-                context.startForegroundService(intent)
+                context.startForegroundService(Intent(context, KeepAliveService::class.java))
             } catch (_: ForegroundServiceStartNotAllowedException) {
                 desired = running
                 // Android 12+ blocks foreground service starts from the background unless the app is

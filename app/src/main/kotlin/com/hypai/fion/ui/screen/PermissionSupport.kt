@@ -54,7 +54,7 @@ private tailrec fun Context.findActivity(): Activity? = when (this) {
 }
 
 @Composable
-internal fun rememberPermissionsRequest(onResult: (PermissionOutcome) -> Unit): (List<AppPermission>) -> Unit {
+fun rememberPermissionRequest(onResult: (PermissionOutcome) -> Unit): (PermissionGroup) -> Unit {
     val context = LocalContext.current
     val activity = remember(context) { context.findActivity() }
     val refreshReadiness = LocalRefreshReadiness.current
@@ -78,19 +78,13 @@ internal fun rememberPermissionsRequest(onResult: (PermissionOutcome) -> Unit): 
         }
         latestOnResult(outcome)
     }
-    return { permissions ->
-        val names = permissions.map(AppPermission::manifestName)
+    return { group ->
+        val names = group.requirements.map(AppPermission::manifestName)
         lastRequested = names
         hadRationale = activity != null && names.any { activity.shouldShowRequestPermissionRationale(it) }
         requestedAt = SystemClock.elapsedRealtime()
         launcher.launch(names.toTypedArray())
     }
-}
-
-@Composable
-fun rememberPermissionRequest(onResult: (PermissionOutcome) -> Unit): (PermissionGroup) -> Unit {
-    val request = rememberPermissionsRequest(onResult)
-    return { group -> request(group.requirements) }
 }
 
 class PermissionLook(
@@ -119,14 +113,14 @@ private val SheetRowPadding = PaddingValues(start = 20.dp, end = 24.dp, top = 8.
 @Composable
 fun PermissionSheet(prompt: PermissionPrompt, readiness: Readiness, onDismiss: () -> Unit) {
     val context = LocalContext.current
-    val request = rememberPermissionsRequest { if (it == PermissionOutcome.Blocked) context.openAppDetails() }
-    val items: List<Pair<PermissionGroup, List<AppPermission>>>
+    val request = rememberPermissionRequest { if (it == PermissionOutcome.Blocked) context.openAppDetails() }
+    val items: List<PermissionGroup>
     val title: String
     val subtitle: String
     val onStart: (() -> Unit)?
     when (prompt) {
         is PermissionPrompt.Forwarding -> {
-            items = prompt.kinds.map { it.permission to it.permission.requirements }
+            items = prompt.kinds.map(EventKind::permission)
             val (titleRes, subtitleRes) = when (prompt.kinds.singleOrNull()) {
                 null -> R.string.perm_sheet_title to R.string.service_text
                 EventKind.Sms -> R.string.perm_sheet_sms_title to R.string.forward_sms_on
@@ -137,31 +131,31 @@ fun PermissionSheet(prompt: PermissionPrompt, readiness: Readiness, onDismiss: (
             onStart = prompt.onStart
         }
         is PermissionPrompt.Variable -> {
-            items = listOf(prompt.variable.permission.let { it to it.requirements })
+            items = listOf(prompt.variable.permission)
             title = stringResource(R.string.perm_sheet_var_title, prompt.variable.displayName(currentLanguage()))
             subtitle = stringResource(R.string.perm_sheet_var_subtitle)
             onStart = null
         }
     }
 
-    val anyGranted = items.any { (_, perms) -> perms.all(readiness::allows) }
-    val allGranted = items.all { (_, perms) -> perms.all(readiness::allows) }
+    val anyGranted = items.any(readiness::allows)
+    val allGranted = items.all(readiness::allows)
     val latestStart by rememberUpdatedState(onStart)
     val latestDismiss by rememberUpdatedState(onDismiss)
     LaunchedEffect(anyGranted) { if (anyGranted) latestStart?.invoke() }
     LaunchedEffect(allGranted) { if (allGranted) latestDismiss() }
 
     AppSheet(title = title, subtitle = subtitle, onDismiss = onDismiss) {
-        items.forEach { (group, perms) ->
+        items.forEach { group ->
             val look = group.look
             ActionRow(
                 badge = look.badge,
                 title = stringResource(look.title),
                 subtitle = stringResource(look.summary),
                 action = stringResource(R.string.keep_grant),
-                onAction = { request(perms) },
+                onAction = { request(group) },
                 contentPadding = SheetRowPadding,
-                ready = perms.all(readiness::allows),
+                ready = readiness.allows(group),
             )
         }
         InfoNote(stringResource(R.string.perm_sheet_note), Modifier.padding(start = 24.dp, end = 24.dp, top = 8.dp), Icons.Shield)

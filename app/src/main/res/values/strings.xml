@@ -75,7 +75,7 @@
 
     <string name="bark_endpoint_title">Bark server</string>
     <string name="bark_endpoint_host">Server address</string>
-    <string name="bark_endpoint_host_error">Enter a valid address, e.g. api.day.app</string>
+    <string name="bark_endpoint_host_error">Enter a valid address, e.g. %1$s</string>
     <string name="bark_device_key_hint">Copy from Bark, or paste full push URL</string>
     <string name="bark_device_key_error">Use only letters, numbers, _ and -</string>
     <string name="bark_show_device_key">Show Device Key</string>
@@ -159,7 +159,6 @@
     <string name="keep_intro">Finish these steps for reliable forwarding</string>
     <string name="keep_permissions">Forwarding permissions</string>
     <string name="keep_settings">Background settings</string>
-    <string name="keep_pending">Needs action</string>
     <string name="keep_enabled">On</string>
 
     <string name="onb_sms_title">Allow receiving\nnew SMS</string>
@@ -207,7 +206,7 @@
     <string name="privacy_flow_https_only_sub">AES optional</string>
     <string name="privacy_flow_bark">Your Bark</string>
     <string name="privacy_flow_no_server">No Fion server · Developer sees nothing</string>
-    <string name="privacy_flow_desc">Data path: from your phone through an encrypted connection straight to your chosen Bark server, never touching any Fion server.</string>
+    <string name="privacy_flow_desc">Data path: from your phone via %1$s straight to %2$s, never touching any Fion server.</string>
     <string name="privacy_trust_no_server">No Fion server</string>
     <string name="privacy_trust_no_history">No history</string>
     <string name="privacy_trust_no_backup">No backup</string>
@@ -237,7 +236,7 @@
     <string name="privacy_perm_call_block_title">Other calls skipped</string>
     <string name="privacy_perm_call_block_sub">No history · No audio</string>
     <string name="privacy_perm_call_purpose">Alerts missed caller &amp; daily count</string>
-    <string name="privacy_perm_call_guard">Skips other calls; no mic access</string>
+    <string name="privacy_perm_call_guard">Skips other calls; no mic access (re-granting may backfill)</string>
 
     <string name="privacy_perm_sim_title">Read SIM info</string>
     <string name="privacy_perm_sim_code">READ_PHONE_STATE · READ_PHONE_NUMBERS</string>
@@ -255,14 +254,13 @@
     <string name="privacy_perm_bg_block_title">Zero third parties</string>
     <string name="privacy_perm_bg_block_sub">No ads · No trackers</string>
     <string name="privacy_perm_bg_purpose">Stays active &amp; sends to your Bark</string>
-    <string name="privacy_perm_bg_guard">Only your Bark; notice optional</string>
+    <string name="privacy_perm_bg_guard">Only your server (same-origin HTTPS redirects); notice optional</string>
 
     <string name="privacy_server_title">You choose the Bark server</string>
     <string name="privacy_server_badge_default">Default · %1$s</string>
     <string name="privacy_server_badge_custom">Self-hosted · %1$s</string>
     <string name="privacy_server_desc">No Fion server. You choose where pushes go.</string>
     <string name="privacy_server_official_title">Default Bark</string>
-    <string name="privacy_server_official_sub">api.day.app</string>
     <string name="privacy_server_official_note">Official, ready now</string>
     <string name="privacy_server_cf_tag">Full control</string>
     <string name="privacy_server_cf_title">Cloudflare</string>
@@ -271,7 +269,7 @@
     <string name="privacy_server_chain_phone">Your phone</string>
     <string name="privacy_server_chain_cf">Your Cloudflare</string>
     <string name="privacy_server_chain_device">Your device</string>
-    <string name="privacy_server_chain_desc">Self-hosted path: from your phone directly through your Cloudflare server to your device.</string>
+    <string name="privacy_server_chain_desc">Self-hosted path: from your phone directly through %1$s to your device.</string>
     <string name="privacy_server_tip">Self-host on Cloudflare + AES for full control.</string>
 
     <string name="privacy_aes_title">Lock secrets before leaving</string>

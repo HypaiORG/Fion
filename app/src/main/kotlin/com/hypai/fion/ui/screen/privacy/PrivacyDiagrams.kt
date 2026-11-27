@@ -17,14 +17,11 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.Icon
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawWithCache
-import androidx.compose.ui.draw.scale
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
@@ -48,15 +45,18 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.hypai.fion.R
+import com.hypai.fion.ui.design.Icon
 import com.hypai.fion.ui.design.IconBadge
 import com.hypai.fion.ui.design.Icons
 import com.hypai.fion.ui.design.MetalSim
 import com.hypai.fion.ui.design.Palette
+import com.hypai.fion.ui.design.StatusPill
+import com.hypai.fion.ui.design.Text
 import com.hypai.fion.ui.design.Type
 
 internal val DiagramShape = RoundedCornerShape(18.dp)
 internal val PanelShape = RoundedCornerShape(14.dp)
-internal val TagShape = RoundedCornerShape(8.dp)
+private val TagShape = RoundedCornerShape(8.dp)
 internal val PanelSurface = Color.White.copy(alpha = 0.64f)
 internal val ReadableLine = Type.Secondary.copy(lineHeight = 20.sp)
 internal val MonoCaption = Type.Caption.copy(fontFamily = FontFamily.Monospace)
@@ -70,7 +70,8 @@ internal fun Modifier.privacyPanel(
 
 @Composable
 internal fun DataJourneyDiagram(encrypted: Boolean, serverHost: String) {
-    val flowDescription = stringResource(R.string.privacy_flow_desc)
+    val channelLabel = stringResource(if (encrypted) R.string.privacy_flow_aes_on else R.string.privacy_flow_https_only)
+    val flowDescription = stringResource(R.string.privacy_flow_desc, channelLabel, serverHost)
     Column(
         Modifier
             .fillMaxWidth()
@@ -95,7 +96,7 @@ internal fun DataJourneyDiagram(encrypted: Boolean, serverHost: String) {
             FlowArrow(Modifier.width(18.dp).height(16.dp), Palette.NavyMid)
 
             JourneyNode(
-                title = stringResource(if (encrypted) R.string.privacy_flow_aes_on else R.string.privacy_flow_https_only),
+                title = channelLabel,
                 subtitle = stringResource(if (encrypted) R.string.privacy_flow_aes_on_sub else R.string.privacy_flow_https_only_sub),
                 modifier = Modifier.weight(1.1f),
             ) {
@@ -261,12 +262,7 @@ private fun BoundaryPanel(
             horizontalArrangement = Arrangement.SpaceBetween,
         ) {
             Box(Modifier.height(28.dp), contentAlignment = Alignment.CenterStart) { visual() }
-            Box(
-                Modifier.size(20.dp).clip(CircleShape).background(accent.copy(alpha = 0.16f)),
-                contentAlignment = Alignment.Center,
-            ) {
-                Icon(badgeIcon, contentDescription = null, Modifier.size(12.dp), tint = accent)
-            }
+            IconBadge(badgeIcon, accent.copy(alpha = 0.16f), accent, CircleShape, size = 20.dp, iconSize = 12.dp)
         }
         Text(title, style = Type.Caption, fontWeight = FontWeight.SemiBold, color = accent)
         Text(subtitle, style = Type.Caption.copy(fontSize = 11.sp, lineHeight = 14.sp), color = Palette.Muted)
@@ -274,33 +270,36 @@ private fun BoundaryPanel(
 }
 
 @Composable
-private fun MiniIcon(icon: ImageVector, tint: Color, iconSize: Dp = 14.dp, bgAlpha: Float = 0.85f) {
-    Box(Modifier.size(26.dp).clip(TagShape).background(Color.White.copy(alpha = bgAlpha)), contentAlignment = Alignment.Center) {
-        Icon(icon, contentDescription = null, Modifier.size(iconSize), tint = tint)
+private fun AllowDotBadge(icon: ImageVector) {
+    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(5.dp)) {
+        IconBadge(icon, Color.White.copy(alpha = 0.85f), Palette.Green, TagShape, size = 26.dp, iconSize = 15.dp)
+        Box(Modifier.size(7.dp).clip(CircleShape).background(Palette.Green))
+    }
+}
+
+@Composable
+private fun BlockBanBadge(icon: ImageVector, tint: Color) {
+    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(5.dp)) {
+        IconBadge(icon, Color.White.copy(alpha = 0.65f), tint, TagShape, size = 26.dp, iconSize = 14.dp)
+        Icon(Icons.Ban, contentDescription = null, Modifier.size(15.dp), tint = Palette.Crimson)
     }
 }
 
 @Composable
 private fun AllowVisual(guide: PermissionGuide) {
     when (guide) {
-        PermissionGuide.Sms -> Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(5.dp)) {
-            MiniIcon(Icons.Sms, Palette.Green, iconSize = 15.dp)
-            Box(Modifier.size(7.dp).clip(CircleShape).background(Palette.Green))
-        }
-        PermissionGuide.CallLog -> Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(5.dp)) {
-            MiniIcon(Icons.MissedCall, Palette.Green, iconSize = 15.dp)
-            Box(Modifier.size(7.dp).clip(CircleShape).background(Palette.Green))
-        }
+        PermissionGuide.Sms -> AllowDotBadge(Icons.Sms)
+        PermissionGuide.CallLog -> AllowDotBadge(Icons.MissedCall)
         PermissionGuide.Sim -> Row(
-            horizontalArrangement = Arrangement.spacedBy(2.dp),
+            horizontalArrangement = Arrangement.spacedBy(4.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            MetalSim(0, Modifier.scale(0.76f))
-            MetalSim(1, Modifier.scale(0.76f))
+            MetalSim(0, width = 18.dp, height = 24.dp)
+            MetalSim(1, width = 18.dp, height = 24.dp)
         }
         PermissionGuide.Background -> Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(5.dp)) {
-            MiniIcon(Icons.Bell, Palette.Green)
-            MiniIcon(Icons.Battery, Palette.Green, iconSize = 15.dp)
+            IconBadge(Icons.Bell, Color.White.copy(alpha = 0.85f), Palette.Green, TagShape, size = 26.dp, iconSize = 14.dp)
+            IconBadge(Icons.Battery, Color.White.copy(alpha = 0.85f), Palette.Green, TagShape, size = 26.dp, iconSize = 15.dp)
         }
     }
 }
@@ -329,18 +328,12 @@ private fun BlockVisual(guide: PermissionGuide) {
                 }
             },
         )
-        PermissionGuide.CallLog -> Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(5.dp)) {
-            MiniIcon(Icons.Phone, mutedCrimson, bgAlpha = 0.65f)
-            Icon(Icons.Ban, contentDescription = null, Modifier.size(15.dp), tint = Palette.Crimson)
-        }
+        PermissionGuide.CallLog -> BlockBanBadge(Icons.Phone, mutedCrimson)
         PermissionGuide.Sim -> Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(5.dp)) {
-            MiniIcon(Icons.Phone, mutedCrimson, bgAlpha = 0.65f)
-            MiniIcon(Icons.Sms, mutedCrimson, bgAlpha = 0.65f)
+            IconBadge(Icons.Phone, Color.White.copy(alpha = 0.65f), mutedCrimson, TagShape, size = 26.dp, iconSize = 14.dp)
+            IconBadge(Icons.Sms, Color.White.copy(alpha = 0.65f), mutedCrimson, TagShape, size = 26.dp, iconSize = 14.dp)
         }
-        PermissionGuide.Background -> Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(5.dp)) {
-            MiniIcon(Icons.Globe, mutedCrimson, bgAlpha = 0.65f)
-            Icon(Icons.Ban, contentDescription = null, Modifier.size(15.dp), tint = Palette.Crimson)
-        }
+        PermissionGuide.Background -> BlockBanBadge(Icons.Globe, mutedCrimson)
     }
 }
 
@@ -416,17 +409,4 @@ internal fun ChainStep(icon: ImageVector, label: String, modifier: Modifier = Mo
             overflow = TextOverflow.Ellipsis,
         )
     }
-}
-
-@Composable
-internal fun StatusPill(text: String, background: Color, color: Color) {
-    Text(
-        text,
-        Modifier.clip(CircleShape).background(background).padding(horizontal = 10.dp, vertical = 4.dp),
-        style = Type.Caption,
-        fontWeight = FontWeight.SemiBold,
-        color = color,
-        maxLines = 1,
-        overflow = TextOverflow.Ellipsis,
-    )
 }

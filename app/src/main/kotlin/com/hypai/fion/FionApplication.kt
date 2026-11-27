@@ -18,7 +18,6 @@ import com.hypai.fion.forward.Forwarder
 import com.hypai.fion.forward.MissedCallSync
 import com.hypai.fion.store.ForwardState
 import com.hypai.fion.store.ForwardStateStore
-import com.hypai.fion.store.KeystoreCipher
 import com.hypai.fion.store.Outbox
 import com.hypai.fion.store.Settings
 import com.hypai.fion.store.SettingsStore
@@ -36,11 +35,11 @@ class AppContainer(private val context: Context) {
     val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
 
     val settingsStore: SettingsStore by lazy {
-        SettingsStore(context.jsonStore("settings", Settings.serializer(), Settings(), KeystoreCipher("settings")))
+        SettingsStore(context.jsonStore("settings", Settings.serializer(), Settings()))
     }
 
     val stateStore: ForwardStateStore by lazy {
-        ForwardStateStore(context.jsonStore("runtime", ForwardState.serializer(), ForwardState(), KeystoreCipher("runtime")))
+        ForwardStateStore(context.jsonStore("runtime", ForwardState.serializer(), ForwardState()))
     }
 
     val outbox: Outbox by lazy { SqliteOutbox(context) }

@@ -13,8 +13,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.selection.selectableGroup
-import androidx.compose.material3.Icon
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -50,6 +48,7 @@ import com.hypai.fion.ui.design.AppSheet
 import com.hypai.fion.ui.design.Chevron
 import com.hypai.fion.ui.design.ConfirmDialog
 import com.hypai.fion.ui.design.GlassCard
+import com.hypai.fion.ui.design.Icon
 import com.hypai.fion.ui.design.IconBadge
 import com.hypai.fion.ui.design.Icons
 import com.hypai.fion.ui.design.ListRow
@@ -57,6 +56,7 @@ import com.hypai.fion.ui.design.Palette
 import com.hypai.fion.ui.design.RadioOption
 import com.hypai.fion.ui.design.ScreenScaffold
 import com.hypai.fion.ui.design.SwitchRow
+import com.hypai.fion.ui.design.Text
 import com.hypai.fion.ui.design.Type
 import com.hypai.fion.ui.screen.forward.labelRes
 import com.hypai.fion.ui.screen.forward.titleRes
@@ -84,7 +84,7 @@ fun SettingsScreen(
     onOpen: (Screen) -> Unit,
 ) {
     val language = currentLanguage()
-    val permissionHealth = readiness.health(settings, language)
+    val permissionHealth = readiness.health(settings)
     val haptics = LocalHapticFeedback.current
     val uriHandler = LocalUriHandler.current
     val context = LocalContext.current

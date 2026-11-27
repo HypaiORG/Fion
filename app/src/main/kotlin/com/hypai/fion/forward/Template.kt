@@ -139,13 +139,14 @@ data class Template(
         for (part in title) if (part is TemplatePart.Var && part.id.appliesTo(kind)) add(part.id)
         for (part in body) if (part is TemplatePart.Var && part.id.appliesTo(kind)) add(part.id)
     }
-
-    fun requiredPermissions(kind: EventKind): Set<PermissionGroup> =
-        usedVariables(kind).mapTo(LinkedHashSet()) { it.permission }
 }
 
 fun normalizeParts(parts: List<TemplatePart>): List<TemplatePart> {
-    if (parts.isEmpty()) return emptyList()
+    if (parts.zipWithNext().none { (a, b) -> a is TemplatePart.Text && b is TemplatePart.Text } &&
+        parts.none { it is TemplatePart.Text && it.value.isEmpty() }
+    ) {
+        return parts
+    }
     val out = ArrayList<TemplatePart>(parts.size)
     val text = StringBuilder()
     for (part in parts) {
@@ -268,8 +269,8 @@ fun TemplateChoice.resolve(kind: EventKind, language: Language, sim: SimIdentity
     is TemplateChoice.Custom -> template
 }
 
-fun TemplateChoice.usedVariables(kind: EventKind, language: Language = Language.En): Set<TemplateVariable> =
-    resolve(kind, language).usedVariables(kind)
+fun TemplateChoice.usedVariables(kind: EventKind): Set<TemplateVariable> =
+    resolve(kind, Language.En).usedVariables(kind)
 
 private val TIME_FORMAT = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm")
 

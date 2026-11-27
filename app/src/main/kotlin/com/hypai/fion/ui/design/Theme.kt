@@ -1,11 +1,16 @@
 package com.hypai.fion.ui.design
 
+import androidx.compose.foundation.IndicationNodeFactory
+import androidx.compose.foundation.LocalIndication
+import androidx.compose.foundation.interaction.InteractionSource
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Typography
-import androidx.compose.material3.lightColorScheme
+import androidx.compose.foundation.text.selection.LocalTextSelectionColors
+import androidx.compose.foundation.text.selection.TextSelectionColors
+import androidx.compose.material.ripple.RippleAlpha
+import androidx.compose.material.ripple.createRippleModifierNode
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.CacheDrawScope
 import androidx.compose.ui.draw.drawWithCache
@@ -18,6 +23,7 @@ import androidx.compose.ui.graphics.FilterQuality
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.drawscope.CanvasDrawScope
 import androidx.compose.ui.graphics.drawscope.scale
+import androidx.compose.ui.node.DelegatableNode
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
@@ -70,29 +76,40 @@ object Palette {
     val GlassBorder = Color(0xBFFFFFFF)
 }
 
-private val colorScheme = lightColorScheme(
-    primary = Palette.Navy,
-    onPrimary = Color.White,
-    primaryContainer = Palette.NavySurface,
-    onPrimaryContainer = Palette.NavyDeep,
-    secondaryContainer = Palette.NavySurface,
-    onSecondaryContainer = Palette.NavyDeep,
-    background = Palette.Canvas,
-    onBackground = Palette.Ink,
-    surface = Palette.CanvasLight,
-    onSurface = Palette.Ink,
-    surfaceContainerHigh = Palette.Sheet,
-    surfaceContainerLow = Palette.Sheet,
-    surfaceContainer = Palette.Sheet,
-    onSurfaceVariant = Palette.Muted,
-    outline = Palette.Outline,
-    outlineVariant = Palette.Hairline,
-    error = Palette.Error,
+private val AppRippleAlpha = RippleAlpha(
+    draggedAlpha = 0.16f,
+    focusedAlpha = 0.10f,
+    hoveredAlpha = 0.08f,
+    pressedAlpha = 0.10f,
 )
+
+private data class RippleIndication(val color: Color) : IndicationNodeFactory {
+    override fun create(interactionSource: InteractionSource): DelegatableNode =
+        createRippleModifierNode(
+            interactionSource = interactionSource,
+            bounded = true,
+            radius = Dp.Unspecified,
+            color = { color },
+            rippleAlpha = { AppRippleAlpha },
+        )
+}
+
+private val DefaultRipple = RippleIndication(Palette.Ink)
+
+private val AppTextSelectionColors = TextSelectionColors(
+    handleColor = Palette.Navy,
+    backgroundColor = Palette.Navy.copy(alpha = 0.25f),
+)
+
+fun appRipple(color: Color): IndicationNodeFactory = RippleIndication(color)
 
 @Composable
 fun AppTheme(content: @Composable () -> Unit) {
-    MaterialTheme(colorScheme = colorScheme, typography = typography, content = content)
+    CompositionLocalProvider(
+        LocalIndication provides DefaultRipple,
+        LocalTextSelectionColors provides AppTextSelectionColors,
+        content = content,
+    )
 }
 
 private data class GlowCacheKey(val size: Size, val density: Float)
@@ -161,20 +178,10 @@ object Type {
     val CardTitle = style(16, 22, FontWeight.Medium)
     val RowTitle = style(15, 22)
     val Field = style(15, 20)
-    val FieldMultiline = style(15, 22)
     val Option = style(16, 24)
     val Note = style(12, 18)
     val Label = style(14, 20, FontWeight.Medium)
     val Body = style(14, 20)
     val Secondary = style(13, 18)
     val Caption = style(12, 16)
-}
-
-private val typography = Typography().run {
-    copy(
-        bodyLarge = bodyLarge.copy(fontSize = 15.sp, lineHeight = 22.sp),
-        labelLarge = Type.Label,
-        headlineSmall = Type.PageTitle,
-        bodyMedium = Type.Body,
-    )
 }
